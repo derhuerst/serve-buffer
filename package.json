@@ -1,0 +1,36 @@
+{
+	"name": "serve-buffer",
+	"description": "Serve a Buffer via HTTP, with Range and conditional-GET support.",
+	"version": "1.0.0",
+	"main": "index.js",
+	"files": [
+		"index.js",
+		"example.js"
+	],
+	"keywords": [
+		"buffer",
+		"http",
+		"serve",
+		"in-memory",
+		"range"
+	],
+	"author": "Jannis R <mail@jannisr.de>",
+	"homepage": "https://github.com/derhuerst/serve-buffer",
+	"repository": "derhuerst/serve-buffer",
+	"bugs": "https://github.com/derhuerst/serve-buffer/issues",
+	"license": "ISC",
+	"engines": {
+		"node": ">=10"
+	},
+	"dependencies": {
+	},
+	"devDependencies": {
+		"tap-min": "^2.0.0",
+		"tape": "^4.13.0",
+		"tape-promise": "^4.0.0"
+	},
+	"scripts": {
+		"test": "env NODE_ENV=dev node test.js | tap-min",
+		"prepublishOnly": "npm test"
+	}
+}
