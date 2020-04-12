@@ -25,8 +25,12 @@ const FAKE_STAT = {
 const serveBuffer = (buf, opt = {}) => {
 	const {
 		'content-type': contentType,
+		getTimeModified,
+		getETag,
 	} = {
 		'content-type': 'application/octet-stream',
+		getTimeModified: () => new Date(),
+		getETag: () => computeEtag(buf),
 		...opt,
 	}
 
@@ -44,7 +48,7 @@ const serveBuffer = (buf, opt = {}) => {
 			// todo: check path, respond with 404 if no match
 
 			// https://nodejs.org/docs/latest-v10.x/api/fs.html#fs_stats_dev
-			const mtime = new Date() // todo: let user decide
+			const mtime = getTimeModified()
 			const stat = {
 				...FAKE_STAT,
 				size: buf.length,
@@ -63,9 +67,11 @@ const serveBuffer = (buf, opt = {}) => {
 			debugger
 
 			// set `ETag` header so that the original `setHeader` doesn't do it
-			const etag = computeEtag(buf)
-			debug('ETag %s', etag)
-			this.res.setHeader('ETag', etag)
+			const etag = getETag()
+			if (etag) {
+				debug('ETag %s', etag)
+				this.res.setHeader('ETag', etag)
+			}
 
 			return origSetHeader(path, stat)
 		}

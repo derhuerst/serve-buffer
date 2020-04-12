@@ -181,3 +181,41 @@ test('multiple ranges', async (t) => {
 	await expectFull('bytes=1-3,-2')
 	t.end()
 })
+
+test('opt.getTimeModified', async (t) => {
+	const mtime = 1234567890 * 1000
+	const getTimeModified = () => new Date(mtime)
+	const serve = serveBuffer(BUF, {getTimeModified})
+
+	const {res: res1} = await fetch(serve, {})
+	t.equal(res1.headers['last-modified'], getTimeModified().toUTCString())
+
+	const earlier = new Date(mtime - 2000).toUTCString()
+	const {res: res2} = await fetch(serve, {
+		headers: {'if-modified-since': earlier},
+	})
+	t.equal(res2.statusCode, 200)
+	const {res: res3} = await fetch(serve, {
+		headers: {'if-unmodified-since': earlier},
+	})
+	t.equal(res3.statusCode, 412)
+
+	const later = new Date(mtime + 1000).toUTCString()
+	const {res: res4} = await fetch(serve, {
+		headers: {'if-modified-since': later},
+	})
+	t.equal(res4.statusCode, 304)
+	const {res: res5} = await fetch(serve, {
+		headers: {'if-unmodified-since': later},
+	})
+	t.equal(res5.statusCode, 200)
+	t.end()
+})
+
+test('opt.getETag', async (t) => {
+	const getETag = () => etag('foo')
+	const serve = serveBuffer(BUF, {getETag})
+	const {res} = await fetch(serve, {})
+	t.equal(res.headers['etag'], getETag())
+	t.end()
+})
