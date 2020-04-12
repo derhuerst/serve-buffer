@@ -22,16 +22,29 @@ const FAKE_STAT = {
 	ino: 123456789, nlink: 1,
 }
 
-const serveBuffer = (buf, opt = {}) => {
+const serveBuffer = (opt = {}) => {
 	const {
-		'content-type': contentType,
-		getTimeModified,
+		contentType,
 		getETag,
 	} = {
-		'content-type': 'application/octet-stream',
-		getTimeModified: () => new Date(),
-		getETag: () => computeEtag(buf),
+		contentType: 'application/octet-stream',
+		getETag: buf => computeEtag(buf),
 		...opt,
+	}
+
+	let buf = Buffer.alloc(0)
+	let timeModified = new Date()
+	let etag = getETag(buf)
+	const bufferHasChanged = (newTimeModified = new Date()) => {
+		if (!(newTimeModified instanceof Date)) {
+			throw new Error('newTimeModified must be a Date')
+		}
+		timeModified = newTimeModified
+		etag = getETag(buf)
+	}
+	const setBuffer = (newBuf, newTimeModified = new Date()) => {
+		buf = newBuf
+		bufferHasChanged(newTimeModified)
 	}
 
 	const serve = (req, res) => { // todo: req, res, next?
@@ -48,13 +61,13 @@ const serveBuffer = (buf, opt = {}) => {
 			// todo: check path, respond with 404 if no match
 
 			// https://nodejs.org/docs/latest-v10.x/api/fs.html#fs_stats_dev
-			const mtime = getTimeModified()
 			const stat = {
 				...FAKE_STAT,
 				size: buf.length,
 				blocks: Math.ceil(buf.length / FAKE_STAT.blksize),
 				atime: new Date(), atimeMs: Date.now(),
-				mtime, mtimMs: +mtime, ctime: mtime, ctimMs: +mtime,
+				mtime: timeModified, mtimMs: +timeModified,
+				ctime: timeModified, ctimMs: +timeModified,
 				birthtime: new Date(1), birthtimeMs: 1,
 			}
 			this.send(path, stat)
@@ -67,7 +80,6 @@ const serveBuffer = (buf, opt = {}) => {
 			debugger
 
 			// set `ETag` header so that the original `setHeader` doesn't do it
-			const etag = getETag()
 			if (etag) {
 				debug('ETag %s', etag)
 				this.res.setHeader('ETag', etag)
@@ -97,6 +109,9 @@ const serveBuffer = (buf, opt = {}) => {
 
 		send.pipe(res)
 	}
+
+	serve.bufferHasChanged = bufferHasChanged
+	serve.setBuffer = setBuffer
 	return serve
 }
 

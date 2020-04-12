@@ -41,16 +41,18 @@ const expectHeaders = (t, headers, expHeaders) => {
 		t.equal(headers[name], val, `headers.${name} is not equal`)
 	}
 }
-const expect = async (t, reqBuf, headers, expCode = 200, expHeaders = {}) => {
-	const serve = serveBuffer(reqBuf)
+const expect = async (t, _buf, headers, expCode = 200, expHeaders = {}) => {
+	const serve = serveBuffer()
+	serve.setBuffer(_buf)
 	const {res, buf, stop} = await fetch(serve, {headers})
 
 	t.equal(res.statusCode, expCode, 'status code is not equal')
 	expectHeaders(t, res.headers, expHeaders)
 	return {res, buf}
 }
-const expectData = async (t, reqBuf, headers, expBuf, expCode = 200, expHeaders = {}) => {
-	const serve = serveBuffer(reqBuf)
+const expectData = async (t, _buf, headers, expBuf, expCode = 200, expHeaders = {}) => {
+	const serve = serveBuffer()
+	serve.setBuffer(_buf)
 	const {res, buf, stop} = await fetch(serve, {headers})
 
 	t.equal(res.statusCode, expCode, 'status code is not equal')
@@ -121,7 +123,9 @@ test('empty Buffer', async (t) => {
 })
 
 test('HEAD', async (t) => {
-	const {buf, res, stop} = await fetch(serveBuffer(BUF), {method: 'HEAD'})
+	const serve = serveBuffer()
+	serve.setBuffer(BUF)
+	const {buf, res, stop} = await fetch(serve, {method: 'HEAD'})
 	t.equal(buf.length, 0)
 	await expectHeaders(t, res.headers, BASE_HEADERS)
 
@@ -183,12 +187,12 @@ test('multiple ranges', async (t) => {
 })
 
 test('opt.getTimeModified', async (t) => {
-	const mtime = 1234567890 * 1000
-	const getTimeModified = () => new Date(mtime)
-	const serve = serveBuffer(BUF, {getTimeModified})
+	const mtime = new Date(1234567890 * 1000)
+	const serve = serveBuffer()
+	serve.setBuffer(BUF, mtime)
 
 	const {res: res1} = await fetch(serve, {})
-	t.equal(res1.headers['last-modified'], getTimeModified().toUTCString())
+	t.equal(res1.headers['last-modified'], mtime.toUTCString())
 
 	const earlier = new Date(mtime - 2000).toUTCString()
 	const {res: res2} = await fetch(serve, {
@@ -214,7 +218,9 @@ test('opt.getTimeModified', async (t) => {
 
 test('opt.getETag', async (t) => {
 	const getETag = () => etag('foo')
-	const serve = serveBuffer(BUF, {getETag})
+	const serve = serveBuffer({getETag})
+	serve.setBuffer(BUF)
+
 	const {res} = await fetch(serve, {})
 	t.equal(res.headers['etag'], getETag())
 	t.end()
