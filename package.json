@@ -23,6 +23,9 @@
 		"node": ">=10"
 	},
 	"dependencies": {
+		"debug": "^4.1.1",
+		"etag": "^1.8.1",
+		"send": "0.17.1"
 	},
 	"devDependencies": {
 		"get-stream": "^5.1.0",
