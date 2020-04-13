@@ -24,10 +24,10 @@
 	},
 	"dependencies": {
 		"debug": "^4.1.1",
-		"etag": "^1.8.1",
 		"send": "0.17.1"
 	},
 	"devDependencies": {
+		"etag": "^1.8.1",
 		"get-stream": "^5.1.0",
 		"tap-min": "^2.0.0",
 		"tape": "^4.13.0",

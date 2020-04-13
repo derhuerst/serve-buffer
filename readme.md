@@ -24,28 +24,40 @@ const express = require('express')
 const serveBuffer = require('serve-buffer')
 
 const app = express()
-const serve = serveBuffer()
-app.use('/data', serve)
 
 let data = Buffer.from('a lot of data here…', 'utf8')
-serve.setBuffer(data)
+app.use('/data', (req, res) => {
+	serveBuffer(req, res, data)
+})
 
 // change buffer later
-data.writeInt8(123, 1)
-serve.bufferHasChanged()
-
-// replace entire buffer later
 data = Buffer.from('entirely different buffer', 'utf8')
-serve.setBuffer(data)
+```
+
+### allow caching via `timeModified` & `etag`
+
+```js
+const computeEtag = require('etag')
+
+let data = Buffer.from('a lot of data here…', 'utf8')
+let timeModified = new Date()
+let etag = computeEtag(data)
+
+app.use('/data', (req, res) => {
+	serveBuffer(req, res, data, {timeModified, etag})
+})
+
+// change buffer later
+data = Buffer.from('entirely different buffer', 'utf8')
+timeModified = new Date()
+etag = computeEtag(data)
 ```
 
 
 ## API
 
 ```js
-const serve = serveBuffer(opt = {})
-serve.bufferHasChanged(newTimeModified = new Date())
-serve.setBuffer(newBuf, newTimeModified = new Date())
+serveBuffer(req, res, buf, opt = {})
 ```
 
 `opt` overrides the default config, which looks like this:
@@ -53,7 +65,8 @@ serve.setBuffer(newBuf, newTimeModified = new Date())
 ```js
 {
 	contentType: 'application/octect-stream',
-	getETag: buf => require('etag')(buf),
+	timeModified: new Date(),
+	etag: require('etag')(buf),
 }
 ```
 

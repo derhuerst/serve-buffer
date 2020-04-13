@@ -10,8 +10,13 @@ const serveBuffer = require('.')
 
 const test = tapePromise(tape)
 
-const fetch = async (serve, reqOpts) => {
-	const server = createServer(serve)
+const fetch = async (buf, reqOpts = {}, serveOpts = {}) => {
+	const server = createServer((req, res) => {
+		serveBuffer(req, res, buf, {
+			etag: etag(buf),
+			...serveOpts,
+		})
+	})
 	const stop = promisify(server.close.bind(server))
 
 	await promisify(server.listen.bind(server))()
@@ -31,7 +36,7 @@ const fetch = async (serve, reqOpts) => {
 		await stop()
 		return {res, buf}
 	} catch (err) {
-		stop()
+		await stop()
 		throw err
 	}
 }
@@ -42,18 +47,14 @@ const expectHeaders = (t, headers, expHeaders) => {
 	}
 }
 const expect = async (t, _buf, headers, expCode = 200, expHeaders = {}) => {
-	const serve = serveBuffer()
-	serve.setBuffer(_buf)
-	const {res, buf, stop} = await fetch(serve, {headers})
+	const {res, buf} = await fetch(_buf, {headers})
 
 	t.equal(res.statusCode, expCode, 'status code is not equal')
 	expectHeaders(t, res.headers, expHeaders)
 	return {res, buf}
 }
 const expectData = async (t, _buf, headers, expBuf, expCode = 200, expHeaders = {}) => {
-	const serve = serveBuffer()
-	serve.setBuffer(_buf)
-	const {res, buf, stop} = await fetch(serve, {headers})
+	const {res, buf} = await fetch(_buf, {headers})
 
 	t.equal(res.statusCode, expCode, 'status code is not equal')
 	expectHeaders(t, res.headers, expHeaders)
@@ -123,9 +124,7 @@ test('empty Buffer', async (t) => {
 })
 
 test('HEAD', async (t) => {
-	const serve = serveBuffer()
-	serve.setBuffer(BUF)
-	const {buf, res, stop} = await fetch(serve, {method: 'HEAD'})
+	const {buf, res} = await fetch(BUF, {method: 'HEAD'})
 	t.equal(buf.length, 0)
 	await expectHeaders(t, res.headers, BASE_HEADERS)
 
@@ -188,40 +187,38 @@ test('multiple ranges', async (t) => {
 
 test('opt.getTimeModified', async (t) => {
 	const mtime = new Date(1234567890 * 1000)
-	const serve = serveBuffer()
-	serve.setBuffer(BUF, mtime)
+	const _fetch = (headers = {}) => {
+		return fetch(BUF, {headers}, {timeModified: mtime})
+	}
 
-	const {res: res1} = await fetch(serve, {})
+	const {res: res1} = await _fetch({})
 	t.equal(res1.headers['last-modified'], mtime.toUTCString())
 
 	const earlier = new Date(mtime - 2000).toUTCString()
-	const {res: res2} = await fetch(serve, {
-		headers: {'if-modified-since': earlier},
+	const {res: res2} = await _fetch({
+		'if-modified-since': earlier,
 	})
 	t.equal(res2.statusCode, 200)
-	const {res: res3} = await fetch(serve, {
-		headers: {'if-unmodified-since': earlier},
+	const {res: res3} = await _fetch({
+		'if-unmodified-since': earlier,
 	})
 	t.equal(res3.statusCode, 412)
 
 	const later = new Date(mtime + 1000).toUTCString()
-	const {res: res4} = await fetch(serve, {
-		headers: {'if-modified-since': later},
+	const {res: res4} = await _fetch({
+		'if-modified-since': later,
 	})
 	t.equal(res4.statusCode, 304)
-	const {res: res5} = await fetch(serve, {
-		headers: {'if-unmodified-since': later},
+	const {res: res5} = await _fetch({
+		'if-unmodified-since': later,
 	})
 	t.equal(res5.statusCode, 200)
 	t.end()
 })
 
-test('opt.getETag', async (t) => {
-	const getETag = () => etag('foo')
-	const serve = serveBuffer({getETag})
-	serve.setBuffer(BUF)
-
-	const {res} = await fetch(serve, {})
-	t.equal(res.headers['etag'], getETag())
+test('opt.etag', async (t) => {
+	const e = etag('foo')
+	const {res} = await fetch(BUF, {}, {etag: e})
+	t.equal(res.headers['etag'], e)
 	t.end()
 })
