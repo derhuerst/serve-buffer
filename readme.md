@@ -73,6 +73,7 @@ serveBuffer(req, res, buf, opt = {})
 
 ## Related
 
+- [`send-stream`](https://github.com/nicolashenry/send-stream) – Streaming file server with Range and conditional-GET support from file system or other streaming sources. (Very similar to `serve-buffer`.)
 - [`send`](https://github.com/pillarjs/send) – Streaming static file server with Range and conditional-GET support
 - [`http-file-response`](https://github.com/mafintosh/http-file-response) – Send a file back as a HTTP response with support for range queries etc.
 
