@@ -19,14 +19,16 @@ const fetch = async (buf, reqOpts = {}, serveOpts = {}) => {
 	})
 	const stop = promisify(server.close.bind(server))
 
-	await promisify(server.listen.bind(server))()
+	await promisify(server.listen.bind(server))({
+		host: '127.0.0.1', port: 12345,
+	})
 	const {address, port} = server.address()
 
 	try {
 		const res = await new Promise((resolve, reject) => {
 			const req = request({
 				...reqOpts,
-				host: address, port,
+				family: 4, host: address, port,
 				timeout: 2 * 1000,
 			}, resolve)
 			req.once('error', reject)
