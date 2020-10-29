@@ -80,7 +80,6 @@ test('whole Buffer, without ETags', async (t) => {
 	const lastModified = res.headers['last-modified']
 	t.ok(lastModified, 'last-modified header is missing/invalid')
 	t.ok((Date.now() - new Date(lastModified)) < 2 * 1000, 'last-modified header is invalid')
-	t.end()
 })
 
 test('whole Buffer, with non-matching ETags', async (t) => {
@@ -93,7 +92,6 @@ test('whole Buffer, with non-matching ETags', async (t) => {
 	await expectData(t, BUF, {
 		'if-match': '*',
 	}, BUF, 200)
-	t.end()
 })
 
 test('whole Buffer, with cache', async (t) => {
@@ -106,7 +104,6 @@ test('whole Buffer, with cache', async (t) => {
 	await expect(t, BUF, {
 		'if-none-match': '*',
 	}, 304)
-	t.end()
 })
 
 test('empty Buffer', async (t) => {
@@ -122,7 +119,6 @@ test('empty Buffer', async (t) => {
 		'cache-control': 'public, max-age=0',
 		'etag': etag(b()),
 	})
-	t.end()
 })
 
 test('HEAD', async (t) => {
@@ -130,7 +126,6 @@ test('HEAD', async (t) => {
 	t.equal(buf.length, 0)
 	await expectHeaders(t, res.headers, BASE_HEADERS)
 
-	t.end()
 })
 
 // https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L561-L673
@@ -141,7 +136,6 @@ test('unsatisfiable range', async (t) => {
 	}, 416, {
 		'content-range': 'bytes */8',
 	})
-	t.end()
 })
 
 test('range 2-4', async (t) => {
@@ -152,7 +146,6 @@ test('range 2-4', async (t) => {
 		'content-range': 'bytes 2-4/8',
 		'content-length': '3', // range is inclusive
 	})
-	t.end()
 })
 
 test('range -3', async (t) => {
@@ -163,7 +156,6 @@ test('range -3', async (t) => {
 		'content-range': 'bytes 5-7/8',
 		'content-length': '3',
 	})
-	t.end()
 })
 
 test('range 3-', async (t) => {
@@ -174,7 +166,6 @@ test('range 3-', async (t) => {
 		'content-range': 'bytes 3-7/8',
 		'content-length': '5',
 	})
-	t.end()
 })
 
 test('multiple ranges', async (t) => {
@@ -184,7 +175,6 @@ test('multiple ranges', async (t) => {
 	await expectFull('bytes=1-3,5-7')
 	await expectFull('bytes=1-3,5-')
 	await expectFull('bytes=1-3,-2')
-	t.end()
 })
 
 test('opt.getTimeModified', async (t) => {
@@ -215,12 +205,10 @@ test('opt.getTimeModified', async (t) => {
 		'if-unmodified-since': later,
 	})
 	t.equal(res5.statusCode, 200)
-	t.end()
 })
 
 test('opt.etag', async (t) => {
 	const e = etag('foo')
 	const {res} = await fetch(BUF, {}, {etag: e})
 	t.equal(res.headers['etag'], e)
-	t.end()
 })
