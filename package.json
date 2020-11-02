@@ -28,6 +28,7 @@
 		"range-parser": "^1.2.1"
 	},
 	"devDependencies": {
+		"eslint": "^7.12.1",
 		"etag": "^1.8.1",
 		"get-stream": "^6.0.0",
 		"tap-min": "^2.0.0",
@@ -35,7 +36,8 @@
 		"tape-promise": "^4.0.0"
 	},
 	"scripts": {
+		"lint": "eslint .",
 		"test": "env NODE_ENV=dev node test.js | tap-min",
-		"prepublishOnly": "npm test"
+		"prepublishOnly": "npm run lint && npm test"
 	}
 }

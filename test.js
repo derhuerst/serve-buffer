@@ -225,7 +225,7 @@ test('opt.cacheControl, opt.maxAge, opt.immutable', async (t) => {
 	})
 
 	const {res: r2} = await fetch(BUF, {}, {
-		maxAge: 321_000,
+		maxAge: 321 * 1000,
 		immutable: true,
 	})
 	expectHeaders(t, r2.headers, {
