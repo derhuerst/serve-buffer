@@ -217,7 +217,7 @@ test('opt.etag', async (t) => {
 
 test('opt.cacheControl, opt.maxAge, opt.immutable', async (t) => {
 	const {res: r1} = await fetch(BUF, {}, {
-		maxAge: 123_000,
+		maxAge: 123 * 1000,
 	})
 	expectHeaders(t, r1.headers, {
 		...BASE_HEADERS,
@@ -225,7 +225,7 @@ test('opt.cacheControl, opt.maxAge, opt.immutable', async (t) => {
 	})
 
 	const {res: r2} = await fetch(BUF, {}, {
-		maxAge: 321_000,
+		maxAge: 321 * 1000,
 		immutable: true,
 	})
 	expectHeaders(t, r2.headers, {
