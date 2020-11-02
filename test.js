@@ -8,14 +8,17 @@ const {buffer: collect} = require('get-stream')
 const etag = require('etag')
 const serveBuffer = require('.')
 
+const T0 = 12345678
+
 const test = tapePromise(tape)
 
-const fetch = async (buf, reqOpts = {}, serveOpts = {}) => {
+const fetch = async (buf, reqOpts = {}, serveOpts = {}, cb = () => {}) => {
 	const server = createServer((req, res) => {
 		serveBuffer(req, res, buf, {
 			etag: etag(buf),
+			timeModified: new Date(T0),
 			...serveOpts,
-		})
+		}, cb)
 	})
 	const stop = promisify(server.close.bind(server))
 
@@ -69,17 +72,16 @@ const b = (hex = '') => Buffer.from(hex, 'hex')
 
 const BASE_HEADERS = {
 	'accept-ranges': 'bytes',
-	'cache-control': 'public, max-age=0',
+	// 'cache-control': 'public, max-age=0',
 	'content-type': 'application/octet-stream',
 	'etag': etag(BUF),
+	'last-modified': new Date(T0).toUTCString(),
+	'cache-control': 'public, max-age=0',
 	'content-length': '8',
 }
 
 test('whole Buffer, without ETags', async (t) => {
-	const {res} = await expectData(t, BUF, {}, BUF, 200, BASE_HEADERS)
-	const lastModified = res.headers['last-modified']
-	t.ok(lastModified, 'last-modified header is missing/invalid')
-	t.ok((Date.now() - new Date(lastModified)) < 2 * 1000, 'last-modified header is invalid')
+	await expectData(t, BUF, {}, BUF, 200, BASE_HEADERS)
 })
 
 test('whole Buffer, with non-matching ETags', async (t) => {
@@ -116,7 +118,7 @@ test('empty Buffer', async (t) => {
 		'if-none-match': [etag(BUF.slice(5)), etag(b())].join(', '),
 	}, 304, {
 		'accept-ranges': 'bytes',
-		'cache-control': 'public, max-age=0',
+		// 'cache-control': 'public, max-age=0',
 		'etag': etag(b()),
 	})
 })
@@ -168,7 +170,7 @@ test('range 3-', async (t) => {
 	})
 })
 
-test('multiple ranges', async (t) => {
+test('ignores multi-ranges', async (t) => {
 	const expectFull = async (range) => {
 		await expectData(t, BUF, {range}, BUF, 200, BASE_HEADERS)
 	}
@@ -211,4 +213,33 @@ test('opt.etag', async (t) => {
 	const e = etag('foo')
 	const {res} = await fetch(BUF, {}, {etag: e})
 	t.equal(res.headers['etag'], e)
+})
+
+test('opt.cacheControl, opt.maxAge, opt.immutable', async (t) => {
+	const {res: r1} = await fetch(BUF, {}, {
+		maxAge: 123_000,
+	})
+	expectHeaders(t, r1.headers, {
+		...BASE_HEADERS,
+		'cache-control': 'public, max-age=123',
+	})
+
+	const {res: r2} = await fetch(BUF, {}, {
+		maxAge: 321_000,
+		immutable: true,
+	})
+	expectHeaders(t, r2.headers, {
+		...BASE_HEADERS,
+		'cache-control': 'public, max-age=321, immutable',
+	})
+})
+
+test('calls cb', async (t) => {
+	let calls = 0
+	const cb = (err) => {
+		calls++
+		t.ifError(err)
+	}
+	await fetch(BUF, {}, {}, cb)
+	t.equal(calls, 1, 'cb not called once')
 })

@@ -4,20 +4,21 @@
 // - Jesús Leganés Combarro <piranna@gmail.com>
 'use strict'
 
+const debug = require('debug')('serve-buffer')
 const fresh = require('fresh')
 const parseRanges = require('range-parser')
-// const {Readable} = require('stream')
+const {Readable, pipeline} = require('stream')
 
-// const readBuf = (buf, from = 0, to = buf.length) => {
-// 	let offset = from
-// 	const read = function (size) {
-// 		const end = Math.min(offset + size, to)
-// 		this.push(buf.slice(offset, end))
-// 		offset = end
-// 		if (offset >= buf.length) this.push(null) // EOF
-// 	}
-// 	return new Readable({read})
-// }
+const readBuf = (buf, from = 0, to = buf.length) => {
+	let offset = from
+	const read = function (size) {
+		const end = Math.min(offset + size, to)
+		this.push(buf.slice(offset, end))
+		offset = end
+		if (offset >= buf.length) this.push(null) // EOF
+	}
+	return new Readable({read})
+}
 
 // https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/index.js#L307-L319
 const isConditionalGET = (req) => {
@@ -149,11 +150,12 @@ const isClientRangeFresh = (req, opt) => {
 }
 
 // https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/index.js#L259-L294
-const respondEmptyWithStatus = (res, statusCode) => {
+const respondEmptyWithStatus = (res, statusCode, beforeSend) => {
 	// todo: clear headers already set
 	res.statusCode = statusCode
-	res.setHeader('Content-Security-Policy', `default-src 'none'`)
-	res.setHeader('X-Content-Type-Options', 'nosniff')
+	res.setHeader('content-security-policy', `default-src 'none'`)
+	res.setHeader('x-content-type-options', 'nosniff')
+	beforeSend()
 	res.end()
 }
 
@@ -162,6 +164,10 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		contentType: 'application/octet-stream',
 		timeModified: new Date(),
 		etag: null,
+		cacheControl: true, // send `cache-control` header?
+		maxAge: 0, // ms
+		immutable: false,
+		beforeSend: () => {},
 		// todo: immutable, see send() option
 		// todo: maxAge, see send() option
 		...opt,
@@ -175,17 +181,35 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 	if (opt.etag !== null && 'string' !== typeof opt.etag) {
 		throw new TypeError('opt.etag must a string or null')
 	}
+	if ('function' !== typeof opt.beforeSend) {
+		throw new TypeError('opt.beforeSend must a function or null')
+	}
+	const beforeSend = () => opt.beforeSend(req, res, buf, opt)
+	debug('opt', opt)
 
 	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/index.js#L599-L708
 
+	res.setHeader('content-type', opt.contentType)
+	res.setHeader('accept-ranges', 'bytes')
+	res.setHeader('last-modified', opt.timeModified.toUTCString())
+	if (opt.etag) res.setHeader('etag', opt.etag)
+	if (opt.cacheControl) {
+		res.setHeader('cache-control', [
+			'public, max-age=', Math.floor(opt.maxAge / 1000),
+			opt.immutable ? ', immutable' : '',
+		].join(''))
+	}
+
 	if (isConditionalGET(req)) {
 		if (failsPrecondition(req, opt)) {
-			respondEmptyWithStatus(res, 412)
+			debug('fails precondition', req.headers)
+			respondEmptyWithStatus(res, 412, beforeSend)
 			return;
 		}
 
 		if (isClientFresh(req, opt)) {
-			respondEmptyWithStatus(res, 304)
+			debug('client cache is fresh', req.headers)
+			respondEmptyWithStatus(res, 304, beforeSend)
 			return;
 		}
 	}
@@ -202,14 +226,16 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		})
 		const malformed = ranges === -2
 		const unsatisfiable = ranges === -1
+		debug('ranges', ranges)
 
 		if (unsatisfiable) {
+			debug('range is unsatisfiable', req.headers['range'])
 			// The "Content-Range" header field is sent in […] 416 (Range Not
 			// Satisfiable) responses to provide information about the selected
 			// representation.
 			// https://tools.ietf.org/html/rfc7233#section-4.2
-			res.setHeader('Content-Range', `bytes */${length}`)
-			respondEmptyWithStatus(res, 416)
+			res.setHeader('content-range', `bytes */${length}`)
+			respondEmptyWithStatus(res, 416, beforeSend)
 			return;
 		}
 
@@ -217,28 +243,30 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		// todo: what about `ranges.length === 0`?
 		if (!malformed && isClientRangeFresh(req, opt) && ranges.length === 1) {
 			const r = ranges[0]
+			debug('responding with range', r)
 			res.statusCode = 206
-			res.setHeader('Content-Range', `bytes ${r.start}-${r.end}/${length}`)
+			res.setHeader('content-range', `bytes ${r.start}-${r.end}/${length}`)
 			start = r.start
 			length = r.end - r.start + 1
 		}
 	}
 
-	res.setHeader('Accept-Ranges', 'bytes')
-	res.setHeader('Content-Type', opt.contentType) // todo: optionally send charset?
-	res.setHeader('Content-Length', length)
-	res.setHeader('Last-Modified', opt.timeModified.toUTCString())
-	if (opt.etag) res.setHeader('ETag', opt.etag)
+	res.setHeader('content-length', length)
 
 	if (req.method === 'HEAD') {
 		res.statusCode = 204
+		beforeSend()
 		res.end()
 		return;
 	}
 
-	// todo: stream response?
-	// todo: expose events `stream` & `end`?
-	res.end(buf.slice(start, start + length))
+	beforeSend()
+	debug('sending body')
+	pipeline(
+		readBuf(buf, start, start + length),
+		res,
+		cb
+	)
 }
 
 const serveBuffer = (req, res, buf, opt, cb) => {
@@ -247,10 +275,7 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 		opt = {}
 	}
 	if ('function' !== typeof cb) {
-		cb = (err) => {
-			if (!err) return;
-			// todo: clear existing headers, reply with error
-		}
+		cb = () => {}
 	}
 	_serveBuffer(req, res, buf, opt, cb)
 }
