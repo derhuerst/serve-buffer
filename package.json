@@ -24,7 +24,8 @@
 	},
 	"dependencies": {
 		"debug": "^4.1.1",
-		"send": "0.17.1"
+		"fresh": "^0.5.2",
+		"range-parser": "^1.2.1"
 	},
 	"devDependencies": {
 		"etag": "^1.8.1",
