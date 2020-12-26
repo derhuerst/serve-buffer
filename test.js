@@ -6,6 +6,7 @@ const {createServer, request} = require('http')
 const {promisify} = require('util')
 const {buffer: collect} = require('get-stream')
 const etag = require('etag')
+const {gzipSync, brotliCompressSync} = require('zlib')
 const serveBuffer = require('.')
 
 const T0 = 12345678
@@ -68,6 +69,8 @@ const expectData = async (t, _buf, headers, expBuf, expCode = 200, expHeaders = 
 }
 
 const BUF = Buffer.from('fedcba0987654321', 'hex')
+const BUF_GZIP = gzipSync(BUF)
+const BUF_BROTLI = brotliCompressSync(BUF)
 const b = (hex = '') => Buffer.from(hex, 'hex')
 
 const BASE_HEADERS = {
@@ -232,6 +235,106 @@ test('opt.cacheControl, opt.maxAge, opt.immutable', async (t) => {
 		...BASE_HEADERS,
 		'cache-control': 'public, max-age=321, immutable',
 	})
+})
+
+test('content-encoding', async (t) => {
+	const withAccEnc = ae => ({headers: {'accept-encoding': ae}})
+	const eqlBuf = (actualBuf, expectedBuf, msg) => {
+		t.equal(actualBuf.toString('hex'), expectedBuf.toString('hex'), msg)
+	}
+
+	// supports HEAD requests
+	const {res: r0, buf: b0} = await fetch(BUF, {
+		method: 'HEAD',
+		...withAccEnc('gzip'),
+	}, {
+		gzippedBuffer: BUF_GZIP,
+	})
+	expectHeaders(t, r0.headers, {
+		...BASE_HEADERS,
+		'content-encoding': 'gzip',
+		etag: undefined,
+		'content-length': BUF_GZIP.length + '',
+	})
+	t.equal(b0.length, 0, 'HEAD body is not empty')
+
+	// supports `accept-encoding: gzip`
+	const {res: r1, buf: b1} = await fetch(BUF, withAccEnc('gzip'), {
+		gzippedBuffer: BUF_GZIP,
+		gzippedEtag: '"foo gzip"',
+	})
+	expectHeaders(t, r1.headers, {
+		...BASE_HEADERS,
+		'content-encoding': 'gzip',
+		'etag': '"foo gzip"',
+		'content-length': BUF_GZIP.length + '',
+	})
+	eqlBuf(b1, BUF_GZIP, 'body is not gzipped')
+
+	// supports `accept-encoding: br`
+	const {res: r2, buf: b2} = await fetch(BUF, withAccEnc('br'), {
+		brotliCompressedBuffer: BUF_BROTLI,
+		brotliCompressedEtag: '"foo brotli"',
+		etag: '"bar"', // should not be used
+	})
+	expectHeaders(t, r2.headers, {
+		...BASE_HEADERS,
+		'content-encoding': 'br',
+		'etag': '"foo brotli"',
+		'content-length': BUF_BROTLI.length + '',
+	})
+	eqlBuf(b2, BUF_BROTLI, 'body is not brotli-compressed')
+
+	// ignores `accept-encoding: identity`
+	const {res: r3, buf: b3} = await fetch(BUF, withAccEnc('identity'), {
+		gzippedBuffer: BUF_GZIP,
+		brotliCompressedBuffer: BUF_BROTLI,
+	})
+	expectHeaders(t, r3.headers, BASE_HEADERS)
+	eqlBuf(b3, BUF, 'body is encoded')
+
+	// picks preferred with >1 encoding, without ETag
+	const {res: r4, buf: b4} = await fetch(BUF, withAccEnc('br, gzip'), {
+		gzippedBuffer: BUF_GZIP,
+		brotliCompressedBuffer: BUF_BROTLI,
+		etag: '"foo"', // should not be used
+	})
+	expectHeaders(t, r4.headers, {
+		...BASE_HEADERS,
+		'content-encoding': 'br',
+		'etag': undefined,
+		'content-length': BUF_BROTLI.length + '',
+	})
+	eqlBuf(b4, BUF_BROTLI, 'body is not brotli-compressed')
+
+	const {res: r5} = await fetch(BUF, withAccEnc('br, gzip'), {
+		gzippedBuffer: BUF_GZIP,
+	})
+	expectHeaders(t, r5.headers, {
+		...BASE_HEADERS,
+		'content-encoding': 'gzip',
+		'etag': undefined,
+		'content-length': BUF_GZIP.length + '',
+	})
+
+	const {res: r6, buf: b6} = await fetch(BUF, {
+		headers: {
+			'accept-encoding': 'br',
+			'range': 'bytes=2-4',
+		},
+	}, {
+		brotliCompressedBuffer: BUF_BROTLI,
+	})
+	t.equal(r6.statusCode, 206, 'status code is 206')
+	expectHeaders(t, r6.headers, {
+		...BASE_HEADERS,
+		'content-encoding': 'br',
+		etag: undefined,
+		'content-range': 'bytes 2-4/' + BUF_BROTLI.length,
+		'content-length': '3',
+	})
+	// https://stackoverflow.com/a/11664307
+	eqlBuf(b6, BUF_BROTLI.slice(2, 5), 'body is not a range of the brotli-compressed buffer')
 })
 
 test('calls cb', async (t) => {

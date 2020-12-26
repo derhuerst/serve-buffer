@@ -8,6 +8,7 @@ const debug = require('debug')('serve-buffer')
 const fresh = require('fresh')
 const parseRanges = require('range-parser')
 const {Readable, pipeline} = require('stream')
+const negotiateEncoding = require('negotiator/lib/encoding')
 
 const readBuf = (buf, from = 0, to = buf.length) => {
 	let offset = from
@@ -164,6 +165,10 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		contentType: 'application/octet-stream',
 		timeModified: new Date(),
 		etag: null,
+		gzippedBuffer: null,
+		gzippedEtag: null,
+		brotliCompressedBuffer: null,
+		brotliCompressedEtag: null,
 		cacheControl: true, // send `cache-control` header?
 		maxAge: 0, // ms
 		immutable: false,
@@ -180,6 +185,18 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 	}
 	if (opt.etag !== null && 'string' !== typeof opt.etag) {
 		throw new TypeError('opt.etag must a string or null')
+	}
+	if (opt.gzippedBuffer !== null && !Buffer.isBuffer(opt.gzippedBuffer)) {
+		throw new TypeError('opt.gzippedBuffer must be a Buffer or null')
+	}
+	if (opt.gzippedEtag !== null && 'string' !== typeof opt.gzippedEtag) {
+		throw new TypeError('opt.gzippedEtag must a string or null')
+	}
+	if (opt.brotliCompressedBuffer !== null && !Buffer.isBuffer(opt.brotliCompressedBuffer)) {
+		throw new TypeError('opt.brotliCompressedBuffer must be a Buffer or null')
+	}
+	if (opt.brotliCompressedEtag !== null && 'string' !== typeof opt.brotliCompressedEtag) {
+		throw new TypeError('opt.brotliCompressedEtag must a string or null')
 	}
 	if ('function' !== typeof opt.beforeSend) {
 		throw new TypeError('opt.beforeSend must a function or null')
@@ -202,6 +219,19 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		].join(''))
 	}
 
+	// The `Vary` HTTP response header determines how to match future request
+	// headers to decide whether a cached response can be used rather than
+	// requesting a fresh one from the origin server. It is used by the server
+	// to indicate which headers it used when selecting a representation of a
+	// resource in a content negotiation algorithm.
+	// Example:
+	// When using the `Vary: User-Agent` header, caching servers should consider
+	// the user agent when deciding whether to serve the page from cache.
+	// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary
+	if (opt.gzippedBuffer || opt.brotliCompressedBuffer) {
+		res.setHeader('vary', 'accept-encoding')
+	}
+
 	if (isConditionalGET(req)) {
 		if (failsPrecondition(req, opt)) {
 			debug('fails precondition', req.headers)
@@ -221,6 +251,28 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 	// start at zero.
 	// https://tools.ietf.org/html/rfc7233#section-2.1
 	let start = 0, length = body.length
+
+	// negotiate content-encoding
+	// see also https://stackoverflow.com/a/11664307
+	const availableEncodings = {}
+	if (opt.gzippedBuffer) {
+		availableEncodings.gzip = [opt.gzippedBuffer, opt.gzippedEtag]
+	}
+	if (opt.brotliCompressedBuffer) {
+		availableEncodings.br = [opt.brotliCompressedBuffer, opt.brotliCompressedEtag]
+	}
+	const acceptEnc = req.headers['accept-encoding']
+	const enc = (negotiateEncoding(acceptEnc, Object.keys(availableEncodings)) || [])[0]
+	if (enc) {
+		debug('using content-encoding', enc)
+		body = availableEncodings[enc][0]
+		length = body.length
+		res.setHeader('content-encoding', enc)
+
+		const etag = availableEncodings[enc][1]
+		if (etag) res.setHeader('etag', etag)
+		else res.removeHeader('etag')
+	}
 
 	// handle range requests
 	if (/^ *bytes=/.test(req.headers['range'])) {
