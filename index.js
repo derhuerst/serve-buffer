@@ -184,8 +184,10 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 	if ('function' !== typeof opt.beforeSend) {
 		throw new TypeError('opt.beforeSend must a function or null')
 	}
-	const beforeSend = () => opt.beforeSend(req, res, buf, opt)
 	debug('opt', opt)
+
+	let body = buf
+	const beforeSend = () => opt.beforeSend(req, res, body, opt)
 
 	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/index.js#L599-L708
 
@@ -218,10 +220,11 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 	// range; that is, the byte positions specified are inclusive. Byte offsets
 	// start at zero.
 	// https://tools.ietf.org/html/rfc7233#section-2.1
-	let start = 0, length = buf.length
+	let start = 0, length = body.length
 
+	// handle range requests
 	if (/^ *bytes=/.test(req.headers['range'])) {
-		const ranges = parseRanges(buf.length, req.headers['range'], {
+		const ranges = parseRanges(body.length, req.headers['range'], {
 			combine: true,
 		})
 		const malformed = ranges === -2
@@ -263,7 +266,7 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 	beforeSend()
 	debug('sending body')
 	pipeline(
-		readBuf(buf, start, start + length),
+		readBuf(body, start, start + length),
 		res,
 		cb
 	)
