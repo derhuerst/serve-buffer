@@ -53,6 +53,12 @@ timeModified = new Date()
 etag = computeEtag(data)
 ```
 
+### serve [gzipped](https://en.wikipedia.org/wiki/Gzip) & [Brotli](https://en.wikipedia.org/wiki/Brotli)-compressed data
+
+If you pass [`Buffer`](https://nodejs.org/api/buffer.html#buffer_buffer)s as `opt.gzippedBuffer` and/or `opt.brotliCompressedBuffer`, `serve-buffer` will serve them to clients requesting compressed data.
+
+This will reduce the amount of transferred data at the cost of higher CPU load, so it is usually worth it if you have a rarely- to medium-often-changing feed and many consumers.
+
 
 ## API
 
@@ -67,6 +73,11 @@ serveBuffer(req, res, buf, opt = {})
 	contentType: 'application/octet-stream',
 	timeModified: new Date(),
 	etag: require('etag')(buf),
+
+	gzippedBuffer: null, // or Buffer
+	gzippedEtag: null, // or string
+	brotliCompressedBuffer: null, // or Buffer
+	brotliCompressedEtag: null, // or string
 }
 ```
 
