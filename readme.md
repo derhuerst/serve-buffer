@@ -90,6 +90,13 @@ serveBuffer(req, res, buf, opt = {})
 	// lazy compression
 	gzip: null, // or buf => ({compressedBuffer, compressedEtag})
 	brotliCompress: null, // or buf => ({compressedBuffer, compressedEtag})
+
+	cacheControl: true, // send cache-control header?
+	maxAge: 0, // for cache-control, in milliseconds
+	immutable: false, // for cache-control
+
+	// hook functions for modifying serve-buffer's behavior
+	beforeSend: (req, res, body, opt) => {},
 }
 ```
 

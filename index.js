@@ -180,8 +180,6 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		immutable: false,
 
 		beforeSend: () => {},
-		// todo: immutable, see send() option
-		// todo: maxAge, see send() option
 		...opt,
 	}
 	if ('string' !== typeof opt.contentType) {
