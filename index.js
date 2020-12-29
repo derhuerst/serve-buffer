@@ -165,13 +165,20 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		contentType: 'application/octet-stream',
 		timeModified: new Date(),
 		etag: null,
+
+		// ahead-of-time compression
 		gzippedBuffer: null,
 		gzippedEtag: null,
 		brotliCompressedBuffer: null,
 		brotliCompressedEtag: null,
+		// lazy compression
+		gzip: null,
+		brotliCompress: null,
+
 		cacheControl: true, // send `cache-control` header?
 		maxAge: 0, // ms
 		immutable: false,
+
 		beforeSend: () => {},
 		// todo: immutable, see send() option
 		// todo: maxAge, see send() option
@@ -197,6 +204,12 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 	}
 	if (opt.brotliCompressedEtag !== null && 'string' !== typeof opt.brotliCompressedEtag) {
 		throw new TypeError('opt.brotliCompressedEtag must a string or null')
+	}
+	if (opt.gzip !== null && 'function' !== typeof opt.gzip) {
+		throw new TypeError('opt.gzip must a function or null')
+	}
+	if (opt.brotliCompress !== null && 'function' !== typeof opt.brotliCompress) {
+		throw new TypeError('opt.brotliCompress must a function or null')
 	}
 	if ('function' !== typeof opt.beforeSend) {
 		throw new TypeError('opt.beforeSend must a function or null')
@@ -255,22 +268,40 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 	// negotiate content-encoding
 	// see also https://stackoverflow.com/a/11664307
 	const availableEncodings = {}
-	if (opt.gzippedBuffer) {
-		availableEncodings.gzip = [opt.gzippedBuffer, opt.gzippedEtag]
+	if (opt.gzip) availableEncodings.gzip = opt.gzip
+	else if (opt.gzippedBuffer) {
+		availableEncodings.gzip = buf => ({
+			compressedBuffer: opt.gzippedBuffer,
+			compressedEtag: opt.gzippedEtag
+		})
 	}
-	if (opt.brotliCompressedBuffer) {
-		availableEncodings.br = [opt.brotliCompressedBuffer, opt.brotliCompressedEtag]
+	if (opt.brotliCompress) availableEncodings.br = opt.brotliCompress
+	else if (opt.brotliCompressedBuffer) {
+		availableEncodings.br = buf => ({
+			compressedBuffer: opt.brotliCompressedBuffer,
+			compressedEtag: opt.brotliCompressedEtag
+		})
 	}
+
 	const acceptEnc = req.headers['accept-encoding']
 	const enc = (negotiateEncoding(acceptEnc, Object.keys(availableEncodings)) || [])[0]
 	if (enc) {
 		debug('using content-encoding', enc)
-		body = availableEncodings[enc][0]
-		length = body.length
+		const encodeWithNegotiatedEncoding = availableEncodings[enc]
+		const {
+			compressedBuffer: cBody, compressedEtag: cEtag,
+		} = encodeWithNegotiatedEncoding(buf)
+		const errMsg = enc + ' encoding fn must return {compressedBuffer, compressedEtag})'
+
+		if (!Buffer.isBuffer(cBody)) throw new TypeError(errMsg)
+		body = cBody
+		length = cBody.length
 		res.setHeader('content-encoding', enc)
 
-		const etag = availableEncodings[enc][1]
-		if (etag) res.setHeader('etag', etag)
+		if (cEtag !== undefined && cEtag !== null && 'string' !== typeof cEtag) {
+			throw new TypeError(errMsg)
+		}
+		if (cEtag) res.setHeader('etag', cEtag)
 		else res.removeHeader('etag')
 	}
 

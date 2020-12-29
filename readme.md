@@ -59,6 +59,14 @@ If you pass [`Buffer`](https://nodejs.org/api/buffer.html#buffer_buffer)s as `op
 
 This will reduce the amount of transferred data at the cost of higher CPU load, so it is usually worth it if you have a rarely- to medium-often-changing feed and many consumers.
 
+If you have many feed updates and a small to medium number of consumers, encode the data lazily (once compressed data has been requested) by passing `opt.gzip: buf => ({compressedBuffer, compressedEtag})` and/or `opt.brotliCompress: buf => ({compressedBuffer, compressedEtag})`:
+
+```js
+
+```
+
+Keep in mind that these functions must be synchronous, so they will [block the event loop](https://nodejs.org/en/docs/guides/blocking-vs-non-blocking/).
+
 
 ## API
 
@@ -74,10 +82,14 @@ serveBuffer(req, res, buf, opt = {})
 	timeModified: new Date(),
 	etag: require('etag')(buf),
 
+	// ahead-of-time compression
 	gzippedBuffer: null, // or Buffer
 	gzippedEtag: null, // or string
 	brotliCompressedBuffer: null, // or Buffer
 	brotliCompressedEtag: null, // or string
+	// lazy compression
+	gzip: null, // or buf => ({compressedBuffer, compressedEtag})
+	brotliCompress: null, // or buf => ({compressedBuffer, compressedEtag})
 }
 ```
 
