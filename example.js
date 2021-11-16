@@ -14,7 +14,7 @@ setInterval(() => {
 	randomBytes(3).copy(data)
 	timeModified = new Date()
 	etag = computeEtag(data)
-})
+}, 5000)
 
 createServer((req, res) => {
 	serveBuffer(req, res, data, {timeModified, etag})
