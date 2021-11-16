@@ -8,9 +8,13 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 		opt = {}
 	}
 	if ('function' !== typeof cb) {
-		cb = () => {}
+		cb = (err) => {
+			if (!err) return
+			throw err
+		}
 	}
-	_serveBuffer(req, res, buf, opt, cb)
+	_serveBuffer(req, res, buf, opt)
+	.then(() => cb(), cb)
 }
 
 module.exports = serveBuffer
