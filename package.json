@@ -29,14 +29,17 @@
 		"range-parser": "^1.2.1"
 	},
 	"devDependencies": {
+		"chalk": "^4.1.2",
 		"eslint": "^7.12.1",
 		"etag": "^1.8.1",
+		"execa": "^5.1.1",
 		"get-stream": "^6.0.0",
 		"tap-min": "^2.0.0",
 		"tape": "^5.0.1",
 		"tape-promise": "^4.0.0"
 	},
 	"scripts": {
+		"benchmark": "env NODE_ENV=production node benchmark/index.js",
 		"lint": "eslint .",
 		"test": "env NODE_ENV=dev node test.js | tap-min",
 		"prepublishOnly": "npm run lint && npm test"
