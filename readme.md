@@ -62,10 +62,24 @@ This will reduce the amount of transferred data at the cost of higher CPU load, 
 If you have many feed updates and a small to medium number of consumers, encode the data lazily (once compressed data has been requested) by passing `opt.gzip: buf => ({compressedBuffer, compressedEtag})` and/or `opt.brotliCompress: buf => ({compressedBuffer, compressedEtag})`:
 
 ```js
+const {gzipSync, compressBrotliSync} = require('zlib')
 
+const compressionWith = compress => buf => {
+	const compressedBuffer = compress(buf)
+	return {
+		compressedBuffer,
+		compressedEtag: computeEtag(compressedBuffer),
+	}
+}
+
+// …
+serveBuffer(req, res, buf, {
+	gzip: compressionWith(gzipSync),
+	compressBrotli: compressionWith(compressBrotliSync),
+})
 ```
 
-Keep in mind that these functions must be synchronous, so they will [block the event loop](https://nodejs.org/en/docs/guides/blocking-vs-non-blocking/).
+Keep in mind that these synchronous functions will [block the event loop](https://nodejs.org/en/docs/guides/blocking-vs-non-blocking/).
 
 
 ## API

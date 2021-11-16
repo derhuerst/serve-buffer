@@ -291,7 +291,7 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		const {
 			compressedBuffer: cBody, compressedEtag: cEtag,
 		} = encodeWithNegotiatedEncoding(buf)
-		const errMsg = enc + ' encoding fn must return {compressedBuffer, compressedEtag})'
+		const errMsg = enc + ' encoding fn must return {compressedBuffer, compressedEtag}'
 
 		if (!Buffer.isBuffer(cBody)) throw new TypeError(errMsg)
 		body = cBody
