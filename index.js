@@ -10,8 +10,7 @@ const _serveBuffer = require('./lib/serve-buffer')
 const pGzip = promisify(gzip)
 const pBrotliCompress = promisify(brotliCompress)
 
-const compression = (compress, name, maxSize, unmutatedBuffers) => {
-	const cache = new WeakMap()
+const compression = (compress, name, maxSize, unmutatedBuffers, cache) => {
 	return async (buf) => {
 		if (buf.length > maxSize) {
 			debugCompression(`buffer is larger than ${maxSize} (${buf.length}), skipping compression`)
@@ -32,6 +31,10 @@ const compression = (compress, name, maxSize, unmutatedBuffers) => {
 		return res
 	}
 }
+
+// todo [breaking]: this is ugly, make `serveBuffer` a closure
+const gzipCache = new WeakMap()
+const brotliCompressCache = new WeakMap()
 
 const serveBuffer = (req, res, buf, opt, cb) => {
 	if (cb === undefined && 'function' === typeof opt) {
@@ -58,6 +61,7 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 			'gzip',
 			opt.gzipMaxSize,
 			opt.unmutatedBuffers,
+			gzipCache,
 		)
 	} else if (opt.gzip === false) {
 		opt.gzip = null
@@ -70,6 +74,7 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 			'brotliCompress',
 			opt.brotliCompressMaxSize,
 			opt.unmutatedBuffers,
+			brotliCompressCache,
 		)
 	} else if (opt.brotliCompress === false) {
 		opt.brotliCompress = null
