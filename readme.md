@@ -71,7 +71,7 @@ Keep in mind that these functions must be synchronous, so they will [block the e
 ## API
 
 ```js
-serveBuffer(req, res, buf, opt = {})
+serveBuffer(req, res, buf, opt = {}, cb = () => {})
 ```
 
 `opt` overrides the default config, which looks like this:
@@ -99,6 +99,8 @@ serveBuffer(req, res, buf, opt = {})
 	beforeSend: (req, res, body, opt) => {},
 }
 ```
+
+`cb` will be called once the response headers and body (if applicable) have been sent.
 
 
 ## Related

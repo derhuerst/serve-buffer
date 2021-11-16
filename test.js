@@ -13,7 +13,13 @@ const T0 = 12345678
 
 const test = tapePromise(tape)
 
-const fetch = async (buf, reqOpts = {}, serveOpts = {}, cb = () => {}) => {
+const fetch = async (t, buf, reqOpts = {}, serveOpts = {}) => {
+	let cbCalls = 0
+	const cb = (err) => {
+		cbCalls++
+		t.ifError(err)
+	}
+
 	const server = createServer((req, res) => {
 		serveBuffer(req, res, buf, {
 			etag: etag(buf),
@@ -39,6 +45,7 @@ const fetch = async (buf, reqOpts = {}, serveOpts = {}, cb = () => {}) => {
 			req.end()
 		})
 		const buf = await collect(res)
+		t.equal(cbCalls, 1, 'cb not called once')
 		await stop()
 		return {res, buf}
 	} catch (err) {
@@ -53,14 +60,14 @@ const expectHeaders = (t, headers, expHeaders) => {
 	}
 }
 const expect = async (t, _buf, headers, expCode = 200, expHeaders = {}) => {
-	const {res, buf} = await fetch(_buf, {headers})
+	const {res, buf} = await fetch(t, _buf, {headers})
 
 	t.equal(res.statusCode, expCode, 'status code is not equal')
 	expectHeaders(t, res.headers, expHeaders)
 	return {res, buf}
 }
 const expectData = async (t, _buf, headers, expBuf, expCode = 200, expHeaders = {}) => {
-	const {res, buf} = await fetch(_buf, {headers})
+	const {res, buf} = await fetch(t, _buf, {headers})
 
 	t.equal(res.statusCode, expCode, 'status code is not equal')
 	expectHeaders(t, res.headers, expHeaders)
@@ -127,7 +134,7 @@ test('empty Buffer', async (t) => {
 })
 
 test('HEAD', async (t) => {
-	const {buf, res} = await fetch(BUF, {method: 'HEAD'})
+	const {buf, res} = await fetch(t, BUF, {method: 'HEAD'})
 	t.equal(buf.length, 0)
 	await expectHeaders(t, res.headers, BASE_HEADERS)
 
@@ -185,7 +192,7 @@ test('ignores multi-ranges', async (t) => {
 test('opt.getTimeModified', async (t) => {
 	const mtime = new Date(1234567890 * 1000)
 	const _fetch = (headers = {}) => {
-		return fetch(BUF, {headers}, {timeModified: mtime})
+		return fetch(t, BUF, {headers}, {timeModified: mtime})
 	}
 
 	const {res: res1} = await _fetch({})
@@ -214,12 +221,12 @@ test('opt.getTimeModified', async (t) => {
 
 test('opt.etag', async (t) => {
 	const e = etag('foo')
-	const {res} = await fetch(BUF, {}, {etag: e})
+	const {res} = await fetch(t, BUF, {}, {etag: e})
 	t.equal(res.headers['etag'], e)
 })
 
 test('opt.cacheControl, opt.maxAge, opt.immutable', async (t) => {
-	const {res: r1} = await fetch(BUF, {}, {
+	const {res: r1} = await fetch(t, BUF, {}, {
 		maxAge: 123 * 1000,
 	})
 	expectHeaders(t, r1.headers, {
@@ -227,7 +234,7 @@ test('opt.cacheControl, opt.maxAge, opt.immutable', async (t) => {
 		'cache-control': 'public, max-age=123',
 	})
 
-	const {res: r2} = await fetch(BUF, {}, {
+	const {res: r2} = await fetch(t, BUF, {}, {
 		maxAge: 321 * 1000,
 		immutable: true,
 	})
@@ -244,7 +251,7 @@ test('content-encoding', async (t) => {
 	}
 
 	// supports HEAD requests
-	const {res: r0, buf: b0} = await fetch(BUF, {
+	const {res: r0, buf: b0} = await fetch(t, BUF, {
 		method: 'HEAD',
 		...withAccEnc('gzip'),
 	}, {
@@ -259,7 +266,7 @@ test('content-encoding', async (t) => {
 	t.equal(b0.length, 0, 'HEAD body is not empty')
 
 	// supports `accept-encoding: gzip`
-	const {res: r1, buf: b1} = await fetch(BUF, withAccEnc('gzip'), {
+	const {res: r1, buf: b1} = await fetch(t, BUF, withAccEnc('gzip'), {
 		gzippedBuffer: BUF_GZIP,
 		gzippedEtag: '"foo gzip"',
 	})
@@ -272,7 +279,7 @@ test('content-encoding', async (t) => {
 	eqlBuf(b1, BUF_GZIP, 'body is not gzipped')
 
 	// supports `accept-encoding: br`
-	const {res: r2, buf: b2} = await fetch(BUF, withAccEnc('br'), {
+	const {res: r2, buf: b2} = await fetch(t, BUF, withAccEnc('br'), {
 		brotliCompressedBuffer: BUF_BROTLI,
 		brotliCompressedEtag: '"foo brotli"',
 		etag: '"bar"', // should not be used
@@ -286,7 +293,7 @@ test('content-encoding', async (t) => {
 	eqlBuf(b2, BUF_BROTLI, 'body is not brotli-compressed')
 
 	// ignores `accept-encoding: identity`
-	const {res: r3, buf: b3} = await fetch(BUF, withAccEnc('identity'), {
+	const {res: r3, buf: b3} = await fetch(t, BUF, withAccEnc('identity'), {
 		gzippedBuffer: BUF_GZIP,
 		brotliCompressedBuffer: BUF_BROTLI,
 	})
@@ -294,7 +301,7 @@ test('content-encoding', async (t) => {
 	eqlBuf(b3, BUF, 'body is encoded')
 
 	// picks preferred with >1 encoding, without ETag
-	const {res: r4, buf: b4} = await fetch(BUF, withAccEnc('br, gzip'), {
+	const {res: r4, buf: b4} = await fetch(t, BUF, withAccEnc('br, gzip'), {
 		gzippedBuffer: BUF_GZIP,
 		brotliCompressedBuffer: BUF_BROTLI,
 		etag: '"foo"', // should not be used
@@ -307,7 +314,7 @@ test('content-encoding', async (t) => {
 	})
 	eqlBuf(b4, BUF_BROTLI, 'body is not brotli-compressed')
 
-	const {res: r5} = await fetch(BUF, withAccEnc('br, gzip'), {
+	const {res: r5} = await fetch(t, BUF, withAccEnc('br, gzip'), {
 		gzippedBuffer: BUF_GZIP,
 	})
 	expectHeaders(t, r5.headers, {
@@ -317,7 +324,7 @@ test('content-encoding', async (t) => {
 		'content-length': BUF_GZIP.length + '',
 	})
 
-	const {res: r6, buf: b6} = await fetch(BUF, {
+	const {res: r6, buf: b6} = await fetch(t, BUF, {
 		headers: {
 			'accept-encoding': 'br',
 			'range': 'bytes=2-4',
@@ -356,7 +363,7 @@ test('content-encoding lazy', async (t) => {
 	}
 
 	// supports `accept-encoding: gzip`
-	const {res: r1, buf: b1} = await fetch(BUF, withAccEnc('gzip'), serveOpts)
+	const {res: r1, buf: b1} = await fetch(t, BUF, withAccEnc('gzip'), serveOpts)
 	expectHeaders(t, r1.headers, {
 		...BASE_HEADERS,
 		'content-encoding': 'gzip',
@@ -366,7 +373,7 @@ test('content-encoding lazy', async (t) => {
 	eqlBuf(b1, BUF_GZIP, 'body is not gzipped')
 
 	// supports `accept-encoding: br`
-	const {res: r2, buf: b2} = await fetch(BUF, withAccEnc('br'), serveOpts)
+	const {res: r2, buf: b2} = await fetch(t, BUF, withAccEnc('br'), serveOpts)
 	expectHeaders(t, r2.headers, {
 		...BASE_HEADERS,
 		'content-encoding': 'br',
@@ -374,14 +381,4 @@ test('content-encoding lazy', async (t) => {
 		'content-length': BUF_BROTLI.length + '',
 	})
 	eqlBuf(b2, BUF_BROTLI, 'body is not brotli-compressed')
-})
-
-test('calls cb', async (t) => {
-	let calls = 0
-	const cb = (err) => {
-		calls++
-		t.ifError(err)
-	}
-	await fetch(BUF, {}, {}, cb)
-	t.equal(calls, 1, 'cb not called once')
 })

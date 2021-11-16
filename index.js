@@ -16,7 +16,7 @@ const readBuf = (buf, from = 0, to = buf.length) => {
 		const end = Math.min(offset + size, to)
 		this.push(buf.slice(offset, end))
 		offset = end
-		if (offset >= buf.length) this.push(null) // EOF
+		if (offset >= to) this.push(null) // EOF
 	}
 	return new Readable({read})
 }
@@ -247,12 +247,14 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		if (failsPrecondition(req, opt)) {
 			debug('fails precondition', req.headers)
 			respondEmptyWithStatus(res, 412, beforeSend)
+			cb()
 			return;
 		}
 
 		if (isClientFresh(req, opt)) {
 			debug('client cache is fresh', req.headers)
 			respondEmptyWithStatus(res, 304, beforeSend)
+			cb()
 			return;
 		}
 	}
@@ -320,6 +322,7 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 			// https://tools.ietf.org/html/rfc7233#section-4.2
 			res.setHeader('content-range', `bytes */${length}`)
 			respondEmptyWithStatus(res, 416, beforeSend)
+			cb()
 			return;
 		}
 
@@ -341,6 +344,7 @@ const _serveBuffer = (req, res, buf, opt, cb) => {
 		res.statusCode = 204
 		beforeSend()
 		res.end()
+		cb()
 		return;
 	}
 
