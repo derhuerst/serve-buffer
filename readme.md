@@ -1,6 +1,6 @@
 # serve-buffer
 
-**Serve a [`Buffer`](https://nodejs.org/api/buffer.html#buffer_class_buffer) via HTTP, with [`Range`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Range) and [conditional `GET`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match) support.**
+**Serve a [`Buffer`](https://nodejs.org/api/buffer.html#buffer_class_buffer) via HTTP, with [`Range`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Range), [conditional `GET`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match) and [GZip](https://developer.mozilla.org/en-US/docs/Glossary/GZip_compression)/[Brotli](https://developer.mozilla.org/en-US/docs/Glossary/brotli_compression) compression support.**
 
 [![npm version](https://img.shields.io/npm/v/serve-buffer.svg)](https://www.npmjs.com/package/serve-buffer)
 [![build status](https://api.travis-ci.org/derhuerst/serve-buffer.svg?branch=master)](https://travis-ci.org/derhuerst/serve-buffer)
@@ -57,7 +57,24 @@ etag = computeEtag(data)
 
 Serving compressed data reduces the amount of transferred data at the cost of higher CPU load, so it is usually worth it if your data rarely changes, or if you have slowly connected (or a lot of) consumers.
 
-todo
+If `buf` is reasonably small (<=10mb for GZip, <= 512kb for Brotli), `serve-buffer` will compress it by default. If you don't want this, pass `opt.gzip: false` and/or `opt.brotliCompress: false`; Instead, you can also customise the size limits via `opt.gzipMaxSize` & `opt.brotliCompressMaxSize`.
+
+If you *never mutate* the buffer(s) that you pass into `serveBuffer`, you can tell it to *cache* each buffer's compressed version as long as the instance exists (using a [`WeakMap`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap)) by passing `opt.unmutatedBuffers: true`:
+
+```js
+const data = Buffer.from('a lot of data here…', 'utf8')
+const timeModified = new Date()
+const etag = computeEtag(data)
+
+app.use('/data', (req, res) => {
+	serveBuffer(req, res, data, {
+		timeModified,
+		etag,
+		// Only do this if you never mutate `data`!
+		unmutatedBuffers: true,
+	})
+})
+```
 
 
 ## API
@@ -74,8 +91,12 @@ serveBuffer(req, res, buf, opt = {}, cb = () => {})
 	timeModified: new Date(),
 	etag: require('etag')(buf),
 
-	gzip: null, // or `async (buf) => ({compressedBuffer, compressedEtag})`
-	brotliCompress: null, // or `async (buf) => ({compressedBuffer, compressedEtag})`
+	gzip: true, // or `false` or `async (buf) => ({compressedBuffer, compressedEtag})`
+	gzipMaxSize: 10 * 1024 * 1024, // 10mb
+	brotliCompress: true, // or `false` or `async (buf) => ({compressedBuffer, compressedEtag})`
+	brotliCompressMaxSize: 512 * 1024, // 512kb
+	// Assume that Buffers passed in as `buf` never get mutated? If `true`, each compressed buffer & compressed ETag will be cached as long as the buffer instance exists.
+	unmutatedBuffers: false,
 
 	cacheControl: true, // send cache-control header?
 	maxAge: 0, // for cache-control, in milliseconds
