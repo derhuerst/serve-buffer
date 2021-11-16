@@ -3,6 +3,8 @@
 const execa = require('execa')
 const chalk = require('chalk')
 const {request} = require('http')
+const {Stringifier} = require('csv-stringify')
+const parseApacheBenchOutput = require('./parse-ab-output')
 
 const exitWithError = (err) => {
 	console.error(err)
@@ -11,7 +13,6 @@ const exitWithError = (err) => {
 
 const execaOpts = {
 	stdin: null,
-	stdout: 'inherit',
 	stderr: 'inherit',
 	stripFinalNewline: false,
 }
@@ -74,19 +75,28 @@ serverProcess.catch(exitWithError)
 		flags,
 	}))
 	const estDur = benchmarks.length * 5
-	process.stdout.write(`${benchmarks.length} benchmarks, estimated duration ~${estDur}s\n`)
+	process.stderr.write(`${benchmarks.length} benchmarks, estimated duration ~${estDur}s\n`)
 
-	process.stdout.write(`warming server's v8 JIT\n`)
+	process.stderr.write(`warming server's v8 JIT\n`)
 	await execa('ab', ['-q', '-d', '-t', '5', '-c', '10', 'http://[::]:3000/'], {
 		...execaOpts,
 		stdout: null,
 	})
 
-	for (const {name, cols, flags} of benchmarks) {
-		process.stdout.write(`\n\n\n${chalk.underline(name)}\n\n`)
+	const results = []
 
-		await execa('ab', ['-q', '-d', '-t 5', ...flags, 'http://[::]:3000/'], execaOpts)
+	for (const {name, cols, flags} of benchmarks) {
+		process.stderr.write(`\n\n\n${chalk.underline(name)}\n\n`)
+
+		const {stdout} = await execa('ab', ['-q', '-d', '-t 5', ...flags, 'http://[::]:3000/'], execaOpts)
+		process.stderr.write(stdout)
+		results.push({...cols, ...parseApacheBenchOutput(stdout)})
 	}
+
+	const csv = new Stringifier({header: true})
+	csv.pipe(process.stdout)
+	for (const r of results) csv.write(r)
+	csv.end()
 
 	serverProcess.kill('SIGTERM')
 })()
