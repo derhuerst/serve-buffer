@@ -82,15 +82,25 @@ serverProcess.catch(exitWithError)
 		...execaOpts,
 		stdout: null,
 	})
+	process.stderr.write(`warming server's gzip & brotli cache\n`)
+	await execa('curl', ['-s', '-H', 'accept-encoding: gzip', 'http://[::]:3000/'], {
+		...execaOpts,
+		stdout: null,
+	})
+	await execa('curl', ['-s', '-H', 'accept-encoding: br', 'http://[::]:3000/'], {
+		...execaOpts,
+		stdout: null,
+	})
 
 	const results = []
 
 	for (const {name, cols, flags} of benchmarks) {
-		process.stderr.write(`\n\n\n${chalk.underline(name)}\n\n`)
+		console.error(`\n\n\n${chalk.underline(name)}\n`)
 
 		const {stdout} = await execa('ab', ['-q', '-d', '-t 5', ...flags, 'http://[::]:3000/'], execaOpts)
-		process.stderr.write(stdout)
-		results.push({...cols, ...parseApacheBenchOutput(stdout)})
+		const result = parseApacheBenchOutput(stdout)
+		console.error(result)
+		results.push({...cols, ...result})
 	}
 
 	const csv = new Stringifier({header: true})

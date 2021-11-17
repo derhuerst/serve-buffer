@@ -18,7 +18,11 @@ let etag = computeEtag(data)
 // }, 3000)
 
 const server = createServer((req, res) => {
-	serveBuffer(req, res, data, {timeModified, etag})
+	serveBuffer(req, res, data, {
+		timeModified,
+		etag,
+		unmutatedBuffers: true,
+	})
 })
 
 server.listen({port: 3000, host: '::'}, (err) => {
