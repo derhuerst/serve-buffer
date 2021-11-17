@@ -85,6 +85,7 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 	if ('function' !== typeof cb) {
 		cb = (err) => {
 			if (!err) return
+			if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
 			throw err
 		}
 	}
