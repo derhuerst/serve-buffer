@@ -14,7 +14,7 @@
 There is a surprising number of difficult-to-understand corner cases in the HTTP RFCs. I [tried my best](lib/serve-buffer.js) here, so that others don't have to write quick-and-dirty (which in the HTTP realm usually means slightly wrong) implementations. This library supports the following request headers:
 
 - [`Accept-Encoding`](https://datatracker.ietf.org/doc/html/rfc7231#section-5.3.4)
-- [`Range`](https://datatracker.ietf.org/doc/html/rfc7233#section-3.1)
+- [`Range`](https://datatracker.ietf.org/doc/html/rfc7233#section-3.1) & [`If-Range`](https://datatracker.ietf.org/doc/html/rfc7233#section-3.2)
 - [`If-None-Match`](https://datatracker.ietf.org/doc/html/rfc7232#section-3.2)/[`If-Match`](https://datatracker.ietf.org/doc/html/rfc7232#section-3.1) & [`If-Modified-Since`](https://datatracker.ietf.org/doc/html/rfc7232#section-3.3)/[`If-Unmodified-Since`](https://datatracker.ietf.org/doc/html/rfc7232#section-3.4)
 
 

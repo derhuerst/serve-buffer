@@ -192,6 +192,133 @@ test('ignores multi-ranges', async (t) => {
 	await expectFull('bytes=1-3,-2')
 })
 
+test('range 2-4, if-range', async (t) => {
+	// If a client has a partial copy of a representation and wishes to have
+	// an up-to-date copy of the entire representation, it could use the
+	// Range header field with a conditional GET (using either or both of
+	// If-Unmodified-Since and If-Match.)  However, if the precondition
+	// fails because the representation has been modified, the client would
+	// then have to make a second request to obtain the entire current
+	// representation.
+
+	// The "If-Range" header field allows a client to "short-circuit" the
+	// second request.  Informally, its meaning is as follows: if the
+	// representation is unchanged, send me the part(s) that I am requesting
+	// in Range; otherwise, send me the entire representation.
+
+	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L676-L689
+	{
+		await expectData(t, BUF, {
+			'if-range': etag(BUF),
+			'range': 'bytes=2-4',
+		}, BUF.slice(2, 5), 206, {
+			...BASE_HEADERS,
+			'content-range': 'bytes 2-4/8',
+			'content-length': '3', // range is inclusive
+		})
+	}
+	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L691-L704
+	{
+		await expectData(t, BUF, {
+			'if-range': '"some other etag"',
+			'range': 'bytes=2-4',
+		}, BUF, 200, BASE_HEADERS)
+	}
+	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L706-L719
+	{
+		await expectData(t, BUF, {
+			'if-range': new Date(T0).toUTCString(),
+			'range': 'bytes=2-4',
+		}, BUF.slice(2, 5), 206, {
+			...BASE_HEADERS,
+			'content-range': 'bytes 2-4/8',
+			'content-length': '3', // range is inclusive
+		})
+	}
+	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L721-L734
+	{
+		await expectData(t, BUF, {
+			'if-range': new Date(T0 + 1000).toUTCString(),
+			'range': 'bytes=2-4',
+		}, BUF, 200, BASE_HEADERS)
+	}
+	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L736-L742
+	{
+		await expectData(t, BUF, {
+			'if-range': 'foo',
+			'range': 'bytes=2-4',
+		}, BUF, 200, BASE_HEADERS)
+	}
+})
+
+test('range 2-4, caching', async (t) => {
+	// The Range header field is evaluated after evaluating the precondition
+	// header fields defined in [RFC7232], and only if the result in absence
+	// of the Range header field would be a 200 (OK) response.  In other
+	// words, Range is ignored when a conditional GET would result in a 304
+	// (Not Modified) response.
+	// https://datatracker.ietf.org/doc/html/rfc7233#section-3.1
+	{
+		await expectData(t, BUF, {
+			'if-none-match': etag(BUF),
+			'range': 'bytes=2-4',
+		}, b(), 304, {
+			...BASE_HEADERS,
+			'content-length': undefined,
+		})
+	}
+	{
+		await expectData(t, BUF, {
+			'if-none-match': '"some other etag"',
+			'range': 'bytes=2-4',
+		}, BUF.slice(2, 5), 206, {
+			...BASE_HEADERS,
+			'content-range': 'bytes 2-4/8',
+			'content-length': '3', // range is inclusive
+		})
+	}
+
+	// with if-range in addition
+	{
+		await expectData(t, BUF, {
+			'if-none-match': '"some other etag"',
+			'if-range': etag(BUF),
+			'range': 'bytes=2-4',
+		}, BUF.slice(2, 5), 206, {
+			...BASE_HEADERS,
+			'content-range': 'bytes 2-4/8',
+			'content-length': '3', // range is inclusive
+		})
+	}
+	{
+		await expectData(t, BUF, {
+			'if-none-match': '"some other etag"',
+			'if-range': '"some other etag"',
+			'range': 'bytes=2-4',
+		}, BUF, 200, BASE_HEADERS)
+	}
+	{
+		await expectData(t, BUF, {
+			'if-none-match': etag(BUF),
+			'if-range': '"some other etag"',
+			'range': 'bytes=2-4',
+		}, b(), 304, {
+			...BASE_HEADERS,
+			'content-length': undefined,
+		})
+	}
+	{
+		await expectData(t, BUF, {
+			'if-none-match': etag(BUF),
+			'if-range': etag(BUF),
+			'range': 'bytes=2-4',
+		}, b(), 304, {
+			...BASE_HEADERS,
+			'content-length': undefined,
+		})
+	}
+})
+
 test('opt.getTimeModified', async (t) => {
 	const mtime = new Date(1234567890 * 1000)
 	const _fetch = (headers = {}) => {
@@ -440,6 +567,21 @@ test('content-encoding', async (t) => {
 			etag: etag(BUF_5M),
 			'content-length': BUF_5M.length + '',
 		})
+	}
+})
+
+test('content-encoding & caching', async (t) => {
+	{
+		await expect(t, BUF, {
+			'accept-encoding': 'gzip',
+			'if-none-match': etag(BUF_GZIP),
+		}, 304)
+	}
+	{
+		await expect(t, BUF, {
+			'accept-encoding': 'br',
+			'if-none-match': etag(BUF_BROTLI),
+		}, 304)
 	}
 })
 
