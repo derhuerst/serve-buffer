@@ -9,6 +9,14 @@
 [![support me via GitHub Sponsors](https://img.shields.io/badge/support%20me-donate-fa7664.svg)](https://github.com/sponsors/derhuerst)
 [![chat with me on Twitter](https://img.shields.io/badge/chat%20with%20me-on%20Twitter-1da1f2.svg)](https://twitter.com/derhuerst)
 
+*Note:* If you want to serve *files* with support for `Range`, conditional `GET` and compression, use [`send`](https://github.com/pillarjs/send). If you want to serve an entire directory of files, use [`serve-static`](https://github.com/expressjs/serve-static).
+
+There is a surprising number of difficult-to-understand corner cases in the HTTP RFCs. I [tried my best](lib/serve-buffer.js) here, so that others don't have to write quick-and-dirty (which in the HTTP realm usually means slightly wrong) implementations. This library supports the following request headers:
+
+- [`Accept-Encoding`](https://datatracker.ietf.org/doc/html/rfc7231#section-5.3.4)
+- [`Range`](https://datatracker.ietf.org/doc/html/rfc7233#section-3.1)
+- [`If-None-Match`](https://datatracker.ietf.org/doc/html/rfc7232#section-3.2)/[`If-Match`](https://datatracker.ietf.org/doc/html/rfc7232#section-3.1) & [`If-Modified-Since`](https://datatracker.ietf.org/doc/html/rfc7232#section-3.3)/[`If-Unmodified-Since`](https://datatracker.ietf.org/doc/html/rfc7232#section-3.4)
+
 
 ## Installation
 
