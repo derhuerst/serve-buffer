@@ -110,8 +110,8 @@ serveBuffer(req, res, buf, opt = {}, cb = () => {})
 	maxAge: 0, // for cache-control, in milliseconds
 	immutable: false, // for cache-control
 
-	// hook functions for modifying serve-buffer's behavior
-	beforeSend: (req, res, body, opt) => {},
+	// hook functions for observing or modifying serve-buffer's behavior
+	beforeSend: (req, res, body, opt, negotiatedState) => {},
 }
 ```
 

@@ -20,10 +20,14 @@ const fetch = async (t, buf, reqOpts = {}, serveOpts = {}) => {
 		t.ifError(err)
 	}
 
+	let negotiatedState = {}
 	const server = createServer((req, res) => {
 		serveBuffer(req, res, buf, {
 			etag: etag(buf),
 			timeModified: new Date(T0),
+			beforeSend: (req, res, body, opt, _negotiatedState) => {
+				negotiatedState = _negotiatedState
+			},
 			...serveOpts,
 		}, cb)
 	})
@@ -51,6 +55,7 @@ const fetch = async (t, buf, reqOpts = {}, serveOpts = {}) => {
 		return {
 			res,
 			buf,
+			negotiatedState,
 		}
 	} catch (err) {
 		await stop()
@@ -66,31 +71,40 @@ const partialStrictEqualEntries = (t, actual, actualName, expected) => {
 const expectHeaders = (t, headers, expHeaders) => {
 	partialStrictEqualEntries(t, headers, 'headers', expHeaders)
 }
+const expectNegotiatedState = (t, negotiatedState, expNegotiatedState) => {
+	partialStrictEqualEntries(t, negotiatedState, 'negotiatedState', expNegotiatedState)
+}
 
-const expect = async (t, _buf, headers, expCode = 200, expHeaders = {}) => {
+const expect = async (t, _buf, headers, expCode = 200, expHeaders = {}, expNegotiatedState = {}) => {
 	const {
 		res,
+		negotiatedState,
 		buf,
 	} = await fetch(t, _buf, {headers})
 
 	t.equal(res.statusCode, expCode, 'status code is not equal')
 	expectHeaders(t, res.headers, expHeaders)
+	expectNegotiatedState(t, negotiatedState, expNegotiatedState)
 	return {
 		res,
+		negotiatedState,
 		buf,
 	}
 }
-const expectData = async (t, _buf, headers, expBuf, expCode = 200, expHeaders = {}) => {
+const expectData = async (t, _buf, headers, expBuf, expCode = 200, expHeaders = {}, expNegotiatedState = {}) => {
 	const {
 		res,
+		negotiatedState,
 		buf,
 	} = await fetch(t, _buf, {headers})
 
 	t.equal(res.statusCode, expCode, 'status code is not equal')
 	expectHeaders(t, res.headers, expHeaders)
+	expectNegotiatedState(t, negotiatedState, expNegotiatedState)
 	t.equal(buf.toString('hex'), expBuf.toString('hex'), 'response data is not equal')
 	return {
 		res,
+		negotiatedState,
 		buf,
 	}
 }
@@ -120,10 +134,14 @@ test('whole Buffer, without ETags', async (t) => {
 test('whole Buffer, with non-matching ETags', async (t) => {
 	await expect(t, BUF, {
 		'if-match': [etag(BUF.slice(1)), etag(BUF.slice(3))].join(', '),
-	}, 412)
+	}, 412, {}, {
+		preconditionFailed: true,
+	})
 	await expect(t, BUF, {
 		'if-match': ['"foo"'].join(', '),
-	}, 412)
+	}, 412, {}, {
+		preconditionFailed: true,
+	})
 	await expectData(t, BUF, {
 		'if-match': '*',
 	}, BUF, 200)
@@ -135,10 +153,14 @@ test('whole Buffer, with cache', async (t) => {
 	}, BUF, 200)
 	await expect(t, BUF, {
 		'if-none-match': [etag(BUF.slice(1)), etag(BUF)].join(', '),
-	}, 304)
+	}, 304, {}, {
+		clientIsFresh: true,
+	})
 	await expect(t, BUF, {
 		'if-none-match': '*',
-	}, 304)
+	}, 304, {}, {
+		clientIsFresh: true,
+	})
 })
 
 test('empty Buffer', async (t) => {
@@ -153,16 +175,22 @@ test('empty Buffer', async (t) => {
 		'accept-ranges': 'bytes',
 		// 'cache-control': 'public, max-age=0',
 		'etag': etag(b()),
+	}, {
+		clientIsFresh: true,
 	})
 })
 
 test('HEAD', async (t) => {
 	const {
 		buf,
+		negotiatedState,
 		res,
 	} = await fetch(t, BUF, {method: 'HEAD'})
 	t.equal(buf.length, 0)
 	expectHeaders(t, res.headers, BASE_HEADERS)
+	expectNegotiatedState(t, negotiatedState, {
+		headersOnly: true,
+	})
 })
 
 // https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L561-L673
@@ -172,6 +200,8 @@ test('unsatisfiable range', async (t) => {
 		'range': 'bytes=8-10',
 	}, 416, {
 		'content-range': 'bytes */8',
+	}, {
+		rangeIsUnsatisfiable: true,
 	})
 })
 
@@ -182,6 +212,8 @@ test('range 2-4', async (t) => {
 		...BASE_HEADERS,
 		'content-range': 'bytes 2-4/8',
 		'content-length': '3', // range is inclusive
+	}, {
+		range: true,
 	})
 })
 
@@ -192,6 +224,8 @@ test('range -3', async (t) => {
 		...BASE_HEADERS,
 		'content-range': 'bytes 5-7/8',
 		'content-length': '3',
+	}, {
+		range: true,
 	})
 })
 
@@ -202,6 +236,8 @@ test('range 3-', async (t) => {
 		...BASE_HEADERS,
 		'content-range': 'bytes 3-7/8',
 		'content-length': '5',
+	}, {
+		range: true,
 	})
 })
 
@@ -237,6 +273,8 @@ test('range 2-4, if-range', async (t) => {
 			...BASE_HEADERS,
 			'content-range': 'bytes 2-4/8',
 			'content-length': '3', // range is inclusive
+		}, {
+			range: true,
 		})
 	}
 	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L691-L704
@@ -255,6 +293,8 @@ test('range 2-4, if-range', async (t) => {
 			...BASE_HEADERS,
 			'content-range': 'bytes 2-4/8',
 			'content-length': '3', // range is inclusive
+		}, {
+			range: true,
 		})
 	}
 	// https://github.com/pillarjs/send/blob/de073ed3237ade9ff71c61673a34474b30e5d45b/test/send.js#L721-L734
@@ -287,6 +327,8 @@ test('range 2-4, caching', async (t) => {
 		}, b(), 304, {
 			...BASE_HEADERS,
 			'content-length': undefined,
+		}, {
+			clientIsFresh: true,
 		})
 	}
 	{
@@ -297,6 +339,8 @@ test('range 2-4, caching', async (t) => {
 			...BASE_HEADERS,
 			'content-range': 'bytes 2-4/8',
 			'content-length': '3', // range is inclusive
+		}, {
+			range: true,
 		})
 	}
 
@@ -310,6 +354,8 @@ test('range 2-4, caching', async (t) => {
 			...BASE_HEADERS,
 			'content-range': 'bytes 2-4/8',
 			'content-length': '3', // range is inclusive
+		}, {
+			range: true,
 		})
 	}
 	{
@@ -327,6 +373,8 @@ test('range 2-4, caching', async (t) => {
 		}, b(), 304, {
 			...BASE_HEADERS,
 			'content-length': undefined,
+		}, {
+			clientIsFresh: true,
 		})
 	}
 	{
@@ -337,6 +385,8 @@ test('range 2-4, caching', async (t) => {
 		}, b(), 304, {
 			...BASE_HEADERS,
 			'content-length': undefined,
+		}, {
+			clientIsFresh: true,
 		})
 	}
 })
@@ -415,6 +465,7 @@ test('content negotiation', async (t) => {
 	{
 		const {
 			res,
+			negotiatedState,
 			buf,
 		} = await fetch(t, BUF, {
 			method: 'HEAD',
@@ -432,6 +483,10 @@ test('content negotiation', async (t) => {
 			etag: undefined,
 			'content-length': BUF_GZIP.length + '',
 		})
+		expectNegotiatedState(t, negotiatedState, {
+			encoding: 'gzip',
+			headersOnly: true,
+		})
 		t.equal(buf.length, 0, 'HEAD body is not empty')
 	}
 
@@ -439,6 +494,7 @@ test('content negotiation', async (t) => {
 	{
 		const {
 			res,
+			negotiatedState,
 			buf,
 		} = await fetch(t, BUF, withAccEnc('gzip'), {
 			gzip,
@@ -450,6 +506,9 @@ test('content negotiation', async (t) => {
 			'etag': '"foo gzip"',
 			'content-length': BUF_GZIP.length + '',
 		})
+		expectNegotiatedState(t, negotiatedState, {
+			encoding: 'gzip',
+		})
 		eqlBuf(buf, BUF_GZIP, 'body is not gzipped')
 	}
 
@@ -457,6 +516,7 @@ test('content negotiation', async (t) => {
 	{
 		const {
 			res,
+			negotiatedState,
 			buf,
 		} = await fetch(t, BUF, withAccEnc('br'), {
 			gzip: false,
@@ -468,6 +528,9 @@ test('content negotiation', async (t) => {
 			'content-encoding': 'br',
 			'etag': '"foo brotli"',
 			'content-length': BUF_BROTLI.length + '',
+		})
+		expectNegotiatedState(t, negotiatedState, {
+			encoding: 'br',
 		})
 		eqlBuf(buf, BUF_BROTLI, 'body is not brotli-compressed')
 	}
@@ -489,6 +552,7 @@ test('content negotiation', async (t) => {
 	{
 		const {
 			res,
+			negotiatedState,
 			buf,
 		} = await fetch(t, BUF, withAccEnc('br, gzip, zstd'), {
 			gzip,
@@ -504,11 +568,15 @@ test('content negotiation', async (t) => {
 			'etag': undefined,
 			'content-length': BUF_BROTLI.length + '',
 		})
+		expectNegotiatedState(t, negotiatedState, {
+			encoding: 'br',
+		})
 		eqlBuf(buf, BUF_BROTLI, 'body is not brotli-compressed')
 	}
 	{
 		const {
 			res,
+			negotiatedState,
 			buf,
 		} = await fetch(t, BUF, withAccEnc('br, gzip, zstd'), {
 			gzip: async () => ({
@@ -523,12 +591,16 @@ test('content negotiation', async (t) => {
 			'etag': undefined,
 			'content-length': BUF_GZIP.length + '',
 		})
+		expectNegotiatedState(t, negotiatedState, {
+			encoding: 'gzip',
+		})
 		eqlBuf(buf, BUF_GZIP, 'body is not gzip-compressed')
 	}
 
 	{
 		const {
 			res,
+			negotiatedState,
 			buf,
 		} = await fetch(t, BUF, {
 			headers: {
@@ -549,6 +621,10 @@ test('content negotiation', async (t) => {
 			etag: undefined,
 			'content-range': 'bytes 2-4/' + BUF_BROTLI.length,
 			'content-length': '3',
+		})
+		expectNegotiatedState(t, negotiatedState, {
+			encoding: 'br',
+			range: true,
 		})
 		// https://stackoverflow.com/a/11664307
 		eqlBuf(buf, BUF_BROTLI.slice(2, 5), 'body is not a range of the brotli-compressed buffer')
@@ -632,13 +708,17 @@ test('content-encoding & caching', async (t) => {
 		await expect(t, BUF, {
 			'accept-encoding': 'gzip',
 			'if-none-match': etag(BUF_GZIP),
-		}, 304)
+		}, 304, {}, {
+			clientIsFresh: true,
+		})
 	}
 	{
 		await expect(t, BUF, {
 			'accept-encoding': 'br',
 			'if-none-match': etag(BUF_BROTLI),
-		}, 304)
+		}, 304, {}, {
+			clientIsFresh: true,
+		})
 	}
 })
 
@@ -664,6 +744,7 @@ test('content-encoding lazy', async (t) => {
 	{
 		const {
 			res,
+			negotiatedState,
 			buf,
 		} = await fetch(t, BUF, withAccEnc('gzip'), serveOpts)
 		expectHeaders(t, res.headers, {
@@ -672,6 +753,9 @@ test('content-encoding lazy', async (t) => {
 			'etag': '"bar gzip"',
 			'content-length': BUF_GZIP.length + '',
 		})
+		expectNegotiatedState(t, negotiatedState, {
+			encoding: 'gzip',
+		})
 		eqlBuf(buf, BUF_GZIP, 'body is not gzipped')
 	}
 
@@ -679,6 +763,7 @@ test('content-encoding lazy', async (t) => {
 	{
 		const {
 			res,
+			negotiatedState,
 			buf,
 		} = await fetch(t, BUF, withAccEnc('br'), serveOpts)
 		expectHeaders(t, res.headers, {
@@ -686,6 +771,9 @@ test('content-encoding lazy', async (t) => {
 			'content-encoding': 'br',
 			'etag': '"bar brotli"',
 			'content-length': BUF_BROTLI.length + '',
+		})
+		expectNegotiatedState(t, negotiatedState, {
+			encoding: 'br',
 		})
 		eqlBuf(buf, BUF_BROTLI, 'body is not brotli-compressed')
 	}
