@@ -21,7 +21,7 @@
 	"bugs": "https://github.com/derhuerst/serve-buffer/issues",
 	"license": "ISC",
 	"engines": {
-		"node": ">=16"
+		"node": ">=22"
 	},
 	"dependencies": {
 		"debug": "^4.1.1",
