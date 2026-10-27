@@ -1,7 +1,7 @@
 'use strict'
 
 const {promisify} = require('util')
-const {gzip, brotliCompress} = require('zlib')
+const {gzip, brotliCompress, zstdCompress} = require('zlib')
 const {performance} = require('perf_hooks')
 const computeEtag = require('etag')
 const debugCompression = require('debug')('serve-buffer:compression')
@@ -9,6 +9,7 @@ const _serveBuffer = require('./lib/serve-buffer')
 
 const pGzip = promisify(gzip)
 const pBrotliCompress = promisify(brotliCompress)
+const pZstdCompress = promisify(zstdCompress)
 
 const compression = (compress, name, maxSize, unmutatedBuffers, cache) => {
 	return async (buf) => {
@@ -35,6 +36,7 @@ const compression = (compress, name, maxSize, unmutatedBuffers, cache) => {
 // todo [breaking]: this is ugly, make `serveBuffer` a closure
 const gzipCache = new WeakMap()
 const brotliCompressCache = new WeakMap()
+const zstdCompressCache = new WeakMap()
 
 const serveBuffer = (req, res, buf, opt, cb) => {
 	if (cb === undefined && 'function' === typeof opt) {
@@ -47,6 +49,9 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 		gzipMaxSize: 10 * 1024 * 1024, // 10mb
 		brotliCompress: true,
 		brotliCompressMaxSize: 512 * 1024, // 512kb
+		// todo [breaking]: default to true
+		zstdCompress: false,
+		zstdCompressMaxSize: 10 * 1024 * 1024, // 10mb
 		// Assume that Buffers passed in as `buf` never get mutated? If `true`,
 		// each compressed buffer & compressed ETag will be cached as long as
 		// the buffer instance exists.
@@ -80,6 +85,19 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 		opt.brotliCompress = null
 	} else if ('function' !== typeof opt.brotliCompress) {
 		throw new TypeError('opt.brotliCompress must be true, false or an async function')
+	}
+	if (opt.zstdCompress === true) {
+		opt.zstdCompress = compression(
+			pZstdCompress,
+			'zstd',
+			opt.zstdCompressMaxSize,
+			opt.unmutatedBuffers,
+			zstdCompressCache,
+		)
+	} else if (opt.zstdCompress === false) {
+		opt.zstdCompress = null
+	} else if ('function' !== typeof opt.zstdCompress) {
+		throw new TypeError('opt.zstdCompress must be true, false or an async function')
 	}
 
 	if ('function' !== typeof cb) {
