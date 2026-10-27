@@ -71,7 +71,7 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 	if (opt.brotliCompress === true) {
 		opt.brotliCompress = compression(
 			pBrotliCompress,
-			'brotliCompress',
+			'brotli',
 			opt.brotliCompressMaxSize,
 			opt.unmutatedBuffers,
 			brotliCompressCache,
