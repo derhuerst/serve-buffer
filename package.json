@@ -1,7 +1,7 @@
 {
 	"name": "serve-buffer",
 	"description": "Serve a blob of binary data via HTTP, with support for range requests, conditional GET & compression.",
-	"version": "3.1.0",
+	"version": "4.0.0",
 	"main": "index.js",
 	"files": [
 		"index.js",
