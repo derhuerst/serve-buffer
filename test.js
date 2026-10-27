@@ -20,7 +20,9 @@ const fetch = async (buf, reqOpts = {}, serveOpts = {}) => {
 	let cbCalls = 0
 	const cb = (err) => {
 		cbCalls++
-		ifError(err)
+		if (err) {
+			rejectRes(err)
+		}
 	}
 
 	let negotiatedState = {}
@@ -32,7 +34,8 @@ const fetch = async (buf, reqOpts = {}, serveOpts = {}) => {
 				negotiatedState = _negotiatedState
 			},
 			...serveOpts,
-		}, cb)
+		})
+		.then(() => cb(), cb)
 	})
 	const stop = promisify(server.close.bind(server))
 
@@ -42,8 +45,10 @@ const fetch = async (buf, reqOpts = {}, serveOpts = {}) => {
 	})
 	const {address, port} = server.address()
 
+	let rejectRes
 	try {
 		const res = await new Promise((resolve, reject) => {
+			rejectRes = reject
 			const req = request({
 				...reqOpts,
 				family: 4, host: address, port,
@@ -54,15 +59,16 @@ const fetch = async (buf, reqOpts = {}, serveOpts = {}) => {
 		})
 		const buf = await collect(res)
 		strictEqual(cbCalls, 1, 'cb not called once')
-		await stop()
 		return {
 			res,
 			buf,
 			negotiatedState,
 		}
 	} catch (err) {
-		await stop()
+		server.closeAllConnections()
 		throw err
+	} finally {
+		await stop()
 	}
 }
 

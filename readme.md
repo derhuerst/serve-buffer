@@ -87,7 +87,7 @@ app.use('/data', (req, res) => {
 ## API
 
 ```js
-serveBuffer(req, res, buf, opt = {}, cb = () => {})
+async serveBuffer(req, res, buf, opt = {})
 ```
 
 `opt` overrides the default config, which looks like this:

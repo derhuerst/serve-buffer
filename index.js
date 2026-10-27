@@ -38,12 +38,7 @@ const gzipCache = new WeakMap()
 const brotliCompressCache = new WeakMap()
 const zstdCompressCache = new WeakMap()
 
-const serveBuffer = (req, res, buf, opt, cb) => {
-	if (cb === undefined && 'function' === typeof opt) {
-		cb = opt
-		opt = {}
-	}
-
+const serveBuffer = async (req, res, buf, opt) => {
 	opt = {
 		gzip: true,
 		gzipMaxSize: 10 * 1024 * 1024, // 10mb
@@ -99,15 +94,12 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 		throw new TypeError('opt.zstdCompress must be true, false or an async function')
 	}
 
-	if ('function' !== typeof cb) {
-		cb = (err) => {
-			if (!err) return
-			if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
-			throw err
-		}
+	try {
+		await _serveBuffer(req, res, buf, opt)
+	} catch (err) {
+		if (err.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
+		throw err
 	}
-	_serveBuffer(req, res, buf, opt)
-	.then(() => cb(), cb)
 }
 
 module.exports = serveBuffer
