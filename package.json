@@ -1,7 +1,7 @@
 {
 	"name": "serve-buffer",
-	"description": "Serve a Buffer via HTTP, with Range and conditional-GET support.",
-	"version": "3.0.3",
+	"description": "Serve a blob of binary data via HTTP, with support for range requests, conditional GET & compression.",
+	"version": "3.1.0",
 	"main": "index.js",
 	"files": [
 		"index.js",
