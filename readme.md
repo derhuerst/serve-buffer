@@ -102,7 +102,7 @@ serveBuffer(req, res, buf, opt = {}, cb = () => {})
 	gzipMaxSize: 10 * 1024 * 1024, // 10mb
 	brotliCompress: true, // or `false` or `async (buf) => ({compressedBuffer, compressedEtag})`
 	brotliCompressMaxSize: 512 * 1024, // 512kb
-	zstdCompress: false, // or `true` or `async (buf) => ({compressedBuffer, compressedEtag})`
+	zstdCompress: true, // or `false` or `async (buf) => ({compressedBuffer, compressedEtag})`
 	zstdCompressMaxSize: 10 * 1024 * 1024, // 10mb
 	// Assume that Buffers passed in as `buf` never get mutated? If `true`, each compressed buffer & compressed ETag will be cached as long as the buffer instance exists.
 	unmutatedBuffers: false,

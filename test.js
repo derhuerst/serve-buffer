@@ -726,6 +726,19 @@ test('content negotiation', async (t) => {
 		})
 		eqlBuf(buf, BUF_BROTLI, 'body is not brotli-compressed')
 	}
+	{
+		const {res, buf} = await fetch(t, BUF, withAccEnc('zstd'), {
+			gzip: false,
+			brotliCompress: false,
+		})
+		expectHeaders(t, res.headers, {
+			...BASE_HEADERS,
+			'content-encoding': 'zstd',
+			'etag': etag(BUF_ZSTD),
+			'content-length': BUF_ZSTD.length + '',
+		})
+		eqlBuf(buf, BUF_ZSTD, 'body is not zstandard-compressed')
+	}
 
 	// turning off compression works
 	{
@@ -801,6 +814,14 @@ test('content-encoding & caching', async (t) => {
 		await expect(t, BUF, {
 			'accept-encoding': 'br',
 			'if-none-match': etag(BUF_BROTLI),
+		}, 304, {}, {
+			clientIsFresh: true,
+		})
+	}
+	{
+		await expect(t, BUF, {
+			'accept-encoding': 'zstd',
+			'if-none-match': etag(BUF_ZSTD),
 		}, 304, {}, {
 			clientIsFresh: true,
 		})

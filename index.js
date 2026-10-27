@@ -49,8 +49,7 @@ const serveBuffer = (req, res, buf, opt, cb) => {
 		gzipMaxSize: 10 * 1024 * 1024, // 10mb
 		brotliCompress: true,
 		brotliCompressMaxSize: 512 * 1024, // 512kb
-		// todo [breaking]: default to true
-		zstdCompress: false,
+		zstdCompress: true,
 		zstdCompressMaxSize: 10 * 1024 * 1024, // 10mb
 		// Assume that Buffers passed in as `buf` never get mutated? If `true`,
 		// each compressed buffer & compressed ETag will be cached as long as
