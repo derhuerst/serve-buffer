@@ -30,7 +30,8 @@ const fetch = async (t, buf, reqOpts = {}, serveOpts = {}) => {
 	const stop = promisify(server.close.bind(server))
 
 	await promisify(server.listen.bind(server))({
-		host: '127.0.0.1', port: 12345,
+		host: '127.0.0.1',
+		port: 10000 + Math.round(Math.random() * 9999),
 	})
 	const {address, port} = server.address()
 
