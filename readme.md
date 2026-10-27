@@ -3,11 +3,10 @@
 **Serve a [`Buffer`](https://nodejs.org/api/buffer.html#buffer_class_buffer) via HTTP, with [`Range`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Range), [conditional `GET`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-None-Match) and [GZip](https://developer.mozilla.org/en-US/docs/Glossary/GZip_compression)/[Brotli](https://developer.mozilla.org/en-US/docs/Glossary/brotli_compression) compression support.**
 
 [![npm version](https://img.shields.io/npm/v/serve-buffer.svg)](https://www.npmjs.com/package/serve-buffer)
-[![build status](https://api.travis-ci.org/derhuerst/serve-buffer.svg?branch=master)](https://travis-ci.org/derhuerst/serve-buffer)
 ![ISC-licensed](https://img.shields.io/github/license/derhuerst/serve-buffer.svg)
 ![minimum Node.js version](https://img.shields.io/node/v/serve-buffer.svg)
 [![support me via GitHub Sponsors](https://img.shields.io/badge/support%20me-donate-fa7664.svg)](https://github.com/sponsors/derhuerst)
-[![chat with me on Twitter](https://img.shields.io/badge/chat%20with%20me-on%20Twitter-1da1f2.svg)](https://twitter.com/derhuerst)
+[![chat with me via Matrix](https://img.shields.io/badge/chat%20with%20me-via%20Matrix-000000.svg)](https://matrix.to/#/@derhuerst:matrix.org)
 
 *Note:* If you want to serve *files* with support for `Range`, conditional `GET` and compression, use [`send`](https://github.com/pillarjs/send). If you want to serve an entire directory of files, use [`serve-static`](https://github.com/expressjs/serve-static).
 
